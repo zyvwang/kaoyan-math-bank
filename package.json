@@ -21,9 +21,9 @@
     "migrate:legacy": "tsx scripts/migrate-legacy-workspace.ts",
     "test": "cross-env KMB_APP_DATA_DIR=.tmp/unit-app-data tsx scripts/unit-tests.ts",
     "verify": "npm run build && npm run test && cross-env KMB_WORKSPACE_DIR=.tmp/verify-workspace tsx scripts/verify-export.ts",
-    "dist": "npm run build && electron-builder",
-    "dist:mac": "npm run build && electron-builder --mac dmg",
-    "dist:win": "npm run build && electron-builder --win nsis"
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:mac": "npm run build && electron-builder --mac dmg --publish never",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "@codemirror/language": "^6.12.3",
