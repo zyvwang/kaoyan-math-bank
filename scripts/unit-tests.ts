@@ -17,7 +17,7 @@ import {
   switchWorkspace,
   writeBank
 } from "../server/storage.js";
-import type { QuestionItem } from "../server/types.js";
+import type { QuestionItem } from "../shared/types.js";
 import { moveItemToPositionInList, reorderItemByDrop } from "../src/itemOrder.js";
 import { nextWheelScrollState, wheelDeltaToPixels } from "../src/wheelScroll.js";
 

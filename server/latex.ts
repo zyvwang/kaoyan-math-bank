@@ -8,7 +8,7 @@ import {
   getWorkspaceDirs,
   readAppState
 } from "./storage.js";
-import type { Bank, CompileResult, LatexSettings, QuestionItem, TexStatus } from "./types.js";
+import type { Bank, CompileResult, LatexSettings, QuestionItem, TexStatus } from "../shared/types.js";
 
 export type ExportOrderMode = "normal" | "random";
 

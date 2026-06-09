@@ -29,7 +29,7 @@ async function createWindow() {
       preload: path.join(currentDir, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true
     }
   });
 
@@ -70,11 +70,23 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("shell:open-path", async (_event, targetPath: string) => {
+    await assertKnownWorkspacePath(targetPath);
     return shell.openPath(targetPath);
   });
 
   ipcMain.handle("shell:trash-path", async (_event, targetPath: string) => {
+    await assertKnownWorkspacePath(targetPath);
     await shell.trashItem(targetPath);
     return true;
   });
+}
+
+async function assertKnownWorkspacePath(targetPath: string) {
+  if (typeof targetPath !== "string" || !targetPath.trim()) {
+    throw new Error("缺少工作区路径。");
+  }
+  const { isKnownWorkspacePath } = await import("../server/storage.js");
+  if (!(await isKnownWorkspacePath(targetPath))) {
+    throw new Error("只能操作当前或最近使用过的工作区。");
+  }
 }

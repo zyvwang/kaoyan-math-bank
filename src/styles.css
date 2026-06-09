@@ -790,6 +790,13 @@ button:disabled {
   border-right: 1px solid var(--hairline);
 }
 
+.editorFallback {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .editorPane > [class^="cm-theme"],
 .editorPane .cm-editor {
   height: 100%;

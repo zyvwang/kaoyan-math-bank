@@ -1,4 +1,4 @@
-import type { QuestionItem } from "./types.js";
+import type { QuestionItem } from "../shared/types.js";
 
 export type DropPosition = "before" | "after";
 

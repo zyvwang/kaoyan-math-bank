@@ -1,15 +1,8 @@
 import { constants } from "node:fs";
-import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type {
-  AppState,
-  Bank,
-  LatexSettings,
-  QuestionItem,
-  StarRating,
-  WorkspaceSummary
-} from "./types.js";
+import type { AppState, Bank, LatexSettings, QuestionItem, StarRating, WorkspaceSummary } from "../shared/types.js";
 
 export const rootDir = path.resolve(process.env.KMB_ROOT_DIR ?? process.cwd());
 export const appDataDir = path.resolve(process.env.KMB_APP_DATA_DIR ?? path.join(rootDir, ".app-data"));
@@ -76,7 +69,7 @@ export async function readAppState(): Promise<AppState> {
 export async function writeAppState(state: AppState): Promise<AppState> {
   await mkdir(appDataDir, { recursive: true });
   const normalized = normalizeAppState(state);
-  await writeFile(appStatePath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(appStatePath, normalized);
   return normalized;
 }
 
@@ -220,7 +213,7 @@ export async function ensureWorkspace(workspacePath: string, options: { sample: 
 
   if (!(await fileExists(dirs.bankPath))) {
     const bank = options.sample ? createSampleBank() : createEmptyBank();
-    await writeFile(dirs.bankPath, `${JSON.stringify(bank, null, 2)}\n`, "utf8");
+    await writeJsonFileAtomic(dirs.bankPath, bank, { backup: false });
   }
 
   return dirs;
@@ -299,8 +292,26 @@ export async function writeBank(bank: Bank): Promise<Bank> {
   }
   const dirs = await ensureWorkspace(state.currentWorkspacePath, { sample: false });
   const normalized = normalizeBank(bank);
-  await writeFile(dirs.bankPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(dirs.bankPath, normalized);
   return normalized;
+}
+
+export async function writeJsonFileAtomic(filePath: string, value: unknown, options: { backup?: boolean } = {}) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  const backupPath = `${filePath}.bak`;
+  const content = `${JSON.stringify(value, null, 2)}\n`;
+
+  try {
+    await writeFile(tempPath, content, "utf8");
+    if (options.backup !== false && (await fileExists(filePath))) {
+      await copyFile(filePath, backupPath);
+    }
+    await rename(tempPath, filePath);
+  } catch (error) {
+    await rm(tempPath, { force: true });
+    throw error;
+  }
 }
 
 export function workspaceNameFromPath(workspacePath: string): string {
@@ -449,4 +460,13 @@ export async function workspaceExists(workspacePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function isKnownWorkspacePath(targetPath: string): Promise<boolean> {
+  const resolvedTarget = path.resolve(targetPath);
+  const state = await readAppState();
+  const allowedPaths = [state.currentWorkspacePath, ...state.recentWorkspacePaths]
+    .filter((workspacePath): workspacePath is string => Boolean(workspacePath))
+    .map((workspacePath) => path.resolve(workspacePath));
+  return allowedPaths.some((workspacePath) => workspacePath === resolvedTarget);
 }

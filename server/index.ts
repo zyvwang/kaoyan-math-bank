@@ -33,7 +33,15 @@ import {
   selectedItems,
   writeCurrentItemCheck
 } from "./latex.js";
-import type { AppInfo, QuestionAsset, QuestionItem } from "./types.js";
+import type { AppInfo, QuestionAsset } from "../shared/types.js";
+import {
+  validateBankPayload,
+  validateCompileItemRequest,
+  validateExportRequest,
+  validateTexPathRequest,
+  validateWorkspaceMoveRequest,
+  validateWorkspacePathRequest
+} from "../shared/validation.js";
 
 export interface ApiServerOptions {
   host?: string;
@@ -75,6 +83,7 @@ export function createApiApp(): express.Express {
   });
 
   app.use(express.json({ limit: "8mb" }));
+  app.use(rejectForeignMutatingOrigins);
   app.use("/assets", dynamicStatic("assetDir"));
   app.use("/exports", dynamicStatic("exportDir"));
   app.use("/tmp", dynamicStatic("tempDir"));
@@ -97,7 +106,12 @@ export function createApiApp(): express.Express {
 
   app.put("/api/bank", async (request, response, next) => {
     try {
-      response.json(await writeBank(request.body));
+      const validation = validateBankPayload(request.body);
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
+        return;
+      }
+      response.json(await writeBank(validation.value));
     } catch (error) {
       next(error);
     }
@@ -105,6 +119,10 @@ export function createApiApp(): express.Express {
 
   app.post("/api/workspaces/create", async (request, response, next) => {
     try {
+      if (!isRequestBodyObject(request.body)) {
+        response.status(400).json({ error: "请求体必须是对象。" });
+        return;
+      }
       await createWorkspace(String(request.body.name ?? "New Bank"));
       response.json(await buildAppInfo());
     } catch (error) {
@@ -114,12 +132,12 @@ export function createApiApp(): express.Express {
 
   app.post("/api/workspaces/create-sample", async (request, response, next) => {
     try {
-      const workspacePath = String(request.body.workspacePath ?? "").trim();
-      if (!workspacePath) {
-        response.status(400).json({ error: "缺少示例工作区路径。" });
+      const validation = validateWorkspacePathRequest(request.body, "缺少示例工作区路径。");
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
         return;
       }
-      await createSampleWorkspace(workspacePath);
+      await createSampleWorkspace(validation.value.workspacePath);
       response.json(await buildAppInfo());
     } catch (error) {
       next(error);
@@ -128,12 +146,12 @@ export function createApiApp(): express.Express {
 
   app.post("/api/workspaces/create-empty", async (request, response, next) => {
     try {
-      const workspacePath = String(request.body.workspacePath ?? "").trim();
-      if (!workspacePath) {
-        response.status(400).json({ error: "缺少新工作区路径。" });
+      const validation = validateWorkspacePathRequest(request.body, "缺少新工作区路径。");
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
         return;
       }
-      await createEmptyWorkspace(workspacePath);
+      await createEmptyWorkspace(validation.value.workspacePath);
       response.json(await buildAppInfo());
     } catch (error) {
       next(error);
@@ -142,12 +160,12 @@ export function createApiApp(): express.Express {
 
   app.post("/api/workspaces/open", async (request, response, next) => {
     try {
-      const workspacePath = String(request.body.workspacePath ?? "").trim();
-      if (!workspacePath) {
-        response.status(400).json({ error: "缺少工作区路径。" });
+      const validation = validateWorkspacePathRequest(request.body);
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
         return;
       }
-      await openExistingWorkspace(workspacePath);
+      await openExistingWorkspace(validation.value.workspacePath);
       response.json(await buildAppInfo());
     } catch (error) {
       next(error);
@@ -156,12 +174,12 @@ export function createApiApp(): express.Express {
 
   app.post("/api/workspaces/remove", async (request, response, next) => {
     try {
-      const workspacePath = String(request.body.workspacePath ?? "").trim();
-      if (!workspacePath) {
-        response.status(400).json({ error: "缺少工作区路径。" });
+      const validation = validateWorkspacePathRequest(request.body);
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
         return;
       }
-      await removeWorkspace(workspacePath);
+      await removeWorkspace(validation.value.workspacePath);
       response.json(await buildAppInfo());
     } catch (error) {
       next(error);
@@ -170,13 +188,12 @@ export function createApiApp(): express.Express {
 
   app.post("/api/workspaces/move", async (request, response, next) => {
     try {
-      const workspacePath = String(request.body.workspacePath ?? "").trim();
-      const direction = request.body.direction === "down" ? 1 : -1;
-      if (!workspacePath) {
-        response.status(400).json({ error: "缺少工作区路径。" });
+      const validation = validateWorkspaceMoveRequest(request.body);
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
         return;
       }
-      await moveWorkspace(workspacePath, direction);
+      await moveWorkspace(validation.value.workspacePath, validation.value.direction === "down" ? 1 : -1);
       response.json(await buildAppInfo());
     } catch (error) {
       next(error);
@@ -185,12 +202,12 @@ export function createApiApp(): express.Express {
 
   app.post("/api/workspaces/switch", async (request, response, next) => {
     try {
-      const workspacePath = String(request.body.workspacePath ?? "").trim();
-      if (!workspacePath) {
-        response.status(400).json({ error: "缺少工作区路径。" });
+      const validation = validateWorkspacePathRequest(request.body);
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
         return;
       }
-      await switchWorkspace(workspacePath);
+      await switchWorkspace(validation.value.workspacePath);
       response.json(await buildAppInfo());
     } catch (error) {
       next(error);
@@ -199,8 +216,12 @@ export function createApiApp(): express.Express {
 
   app.post("/api/tex-path", async (request, response, next) => {
     try {
-      const texPath = String(request.body.texPath ?? "").trim();
-      await updateTexPathOverride(texPath || undefined);
+      const validation = validateTexPathRequest(request.body);
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
+        return;
+      }
+      await updateTexPathOverride(validation.value.texPath);
       response.json(await buildAppInfo());
     } catch (error) {
       next(error);
@@ -236,14 +257,13 @@ export function createApiApp(): express.Express {
 
   app.post("/api/compile-item", async (request, response, next) => {
     try {
-      const item = request.body.item as QuestionItem | undefined;
-      const settings = request.body.settings;
-      if (!item?.id) {
-        response.status(400).json({ error: "缺少当前题目。" });
+      const validation = validateCompileItemRequest(request.body);
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
         return;
       }
 
-      const texPath = await writeCurrentItemCheck(item, settings);
+      const texPath = await writeCurrentItemCheck(validation.value.item, validation.value.settings);
       const workDir = path.dirname(texPath);
       const result = await compileLatex(texPath, workDir);
       response.status(result.ok ? 200 : 422).json({
@@ -258,11 +278,16 @@ export function createApiApp(): express.Express {
 
   app.post("/api/export", async (request, response, next) => {
     try {
+      const validation = validateExportRequest(request.body);
+      if (!validation.ok || !validation.value) {
+        response.status(400).json({ error: validation.error });
+        return;
+      }
       const bank = await readBank();
-      const ids = Array.isArray(request.body.itemIds) ? request.body.itemIds.map(String) : [];
-      const fileName = sanitizeFileName(String(request.body.fileName ?? ""));
-      const orderMode = request.body.orderMode === "random" ? "random" : "normal";
-      const randomSeed = String(request.body.randomSeed ?? "").trim() || fileName;
+      const ids = validation.value.itemIds;
+      const fileName = sanitizeFileName(validation.value.fileName);
+      const orderMode = validation.value.orderMode === "random" ? "random" : "normal";
+      const randomSeed = validation.value.randomSeed || fileName;
       const items = selectedItems(bank, ids, { orderMode, randomSeed });
 
       if (items.length === 0) {
@@ -311,6 +336,14 @@ export function createApiApp(): express.Express {
   });
 
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
+    if (error instanceof multer.MulterError) {
+      response.status(400).json({ error: error.message });
+      return;
+    }
+    if (isClientInputError(error)) {
+      response.status(400).json({ error: error.message });
+      return;
+    }
     console.error(error);
     response.status(500).json({
       error: error instanceof Error ? error.message : "服务器内部错误。"
@@ -318,6 +351,53 @@ export function createApiApp(): express.Express {
   });
 
   return app;
+}
+
+function rejectForeignMutatingOrigins(
+  request: express.Request,
+  response: express.Response,
+  next: express.NextFunction
+) {
+  if (!isMutatingMethod(request.method)) {
+    next();
+    return;
+  }
+
+  const origin = request.get("origin");
+  if (!origin) {
+    next();
+    return;
+  }
+
+  try {
+    const url = new URL(origin);
+    if (["127.0.0.1", "localhost", "::1"].includes(url.hostname)) {
+      next();
+      return;
+    }
+  } catch {
+    response.status(403).json({ error: "拒绝未知来源的写入请求。" });
+    return;
+  }
+
+  response.status(403).json({ error: "拒绝非本机来源的写入请求。" });
+}
+
+function isMutatingMethod(method: string): boolean {
+  return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+}
+
+function isRequestBodyObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isClientInputError(error: unknown): error is Error {
+  if (!(error instanceof Error)) return false;
+  return [
+    "该文件夹已经是题库工作区。",
+    "这个文件夹不是题库工作区：缺少 bank.json。",
+    "尚未选择题库工作区。"
+  ].some((message) => error.message.startsWith(message));
 }
 
 export async function startApiServer(options: ApiServerOptions = {}): Promise<StartedApiServer> {

@@ -7,10 +7,11 @@ import {
   buildQuestionOnlyLatex,
   compileLatex,
   copyAssetsForItems,
+  detectTexInstallation,
   orderItemsForExport
 } from "../server/latex.js";
 import { defaultSettings, getCurrentWorkspaceDirs } from "../server/storage.js";
-import type { QuestionItem } from "../server/types.js";
+import type { QuestionItem } from "../shared/types.js";
 
 const workspaceDirs = await getCurrentWorkspaceDirs();
 const workDir = path.join(workspaceDirs.tempDir, "verify-export");
@@ -100,6 +101,15 @@ const questionsPath = path.join(workDir, "questions.tex");
 const fullPath = path.join(workDir, "full.tex");
 await writeFile(questionsPath, buildQuestionOnlyLatex(exportItems, defaultSettings), "utf8");
 await writeFile(fullPath, buildFullLatex(exportItems, defaultSettings), "utf8");
+
+const texStatus = await detectTexInstallation();
+if (!texStatus.available) {
+  await rm(sourceAssetPath, { force: true });
+  console.log(`Verification export skipped PDF compile: ${texStatus.message}`);
+  console.log(`- ${questionsPath}`);
+  console.log(`- ${fullPath}`);
+  process.exit(0);
+}
 
 const questionResult = await compileLatex(questionsPath, workDir, 60_000);
 const fullResult = await compileLatex(fullPath, workDir, 60_000);

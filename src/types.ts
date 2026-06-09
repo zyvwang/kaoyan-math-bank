@@ -1,95 +1,23 @@
-export interface QuestionAsset {
-  id: string;
-  fileName: string;
-  originalName: string;
-  relativePath: string;
-  mimeType: string;
-  size: number;
-  uploadedAt: string;
-}
-
-export interface QuestionItem {
-  id: string;
-  order: number;
-  sourceNumber?: string;
-  chapter: string;
-  tags: string[];
-  star: StarRating;
-  questionTex: string;
-  solutionTex: string;
-  noteTex: string;
-  assets: QuestionAsset[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface LatexSettings {
-  preamble: string;
-  pageSize: "a4";
-  spacing: {
-    item: string;
-    module: string;
-  };
-}
-
-export interface Bank {
-  version: 1;
-  settings: LatexSettings;
-  items: QuestionItem[];
-}
-
-export interface AppState {
-  version: 1;
-  currentWorkspacePath?: string;
-  recentWorkspacePaths: string[];
-  texPathOverride?: string;
-}
-
-export interface WorkspaceSummary {
-  name: string;
-  path: string;
-  exists: boolean;
-}
-
-export interface TexStatus {
-  available: boolean;
-  command?: string;
-  source: "override" | "path" | "common" | "missing";
-  version?: string;
-  message: string;
-}
-
-export interface AppInfo {
-  appState: AppState;
-  currentWorkspaceName: string;
-  currentWorkspacePath: string;
-  recentWorkspaces: WorkspaceSummary[];
-  texStatus: TexStatus;
-  isDesktop: boolean;
-  setupRequired: boolean;
-}
-
-export interface ExportResponse {
-  ok: boolean;
-  exportName: string;
-  exportPath: string;
-  exportUrl: string;
-  files: string[];
-  results: {
-    questions: CompileResponse;
-    full: CompileResponse;
-  };
-}
-
-export interface CompileResponse {
-  ok: boolean;
-  texPath: string;
-  pdfPath?: string;
-  texUrl?: string;
-  pdfUrl?: string;
-  log: string;
-}
-
-export type TexField = "questionTex" | "solutionTex" | "noteTex";
-export type ExportOrderMode = "normal" | "random";
-export type StarRating = 1 | 2 | 3 | 4 | 5;
+export type {
+  ApiErrorResponse,
+  AppInfo,
+  AppState,
+  AssetUploadResponse,
+  Bank,
+  CompileItemRequest,
+  CompileResponse,
+  CompileResult,
+  ExportOrderMode,
+  ExportRequest,
+  ExportResponse,
+  LatexSettings,
+  QuestionAsset,
+  QuestionItem,
+  StarRating,
+  TexField,
+  TexPathRequest,
+  TexStatus,
+  WorkspaceMoveRequest,
+  WorkspacePathRequest,
+  WorkspaceSummary
+} from "../shared/types.js";
