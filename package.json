@@ -1,0 +1,90 @@
+{
+  "name": "kaoyan-math-bank",
+  "version": "0.1.0",
+  "description": "A local-first LaTeX question bank for kaoyan math study.",
+  "author": "Kaoyan Math Bank contributors",
+  "private": false,
+  "license": "MIT",
+  "main": "build/electron/main.js",
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/copy-mathjax.mjs",
+    "dev": "concurrently -k -n api,web -c cyan,green \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
+    "dev:api": "tsx watch server/index.ts",
+    "dev:web": "vite --host 127.0.0.1",
+    "desktop:dev": "npm run build:desktop && concurrently -k -n web,electron -c green,blue \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env KMB_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "typecheck": "tsc -b && tsc -p tsconfig.desktop.json --noEmit",
+    "build:desktop": "tsc -p tsconfig.desktop.json",
+    "build": "npm run typecheck && vite build && npm run build:desktop",
+    "start": "tsx server/index.ts",
+    "start:prod": "node build/server/index.js",
+    "migrate:legacy": "tsx scripts/migrate-legacy-workspace.ts",
+    "test": "cross-env KMB_APP_DATA_DIR=.tmp/unit-app-data tsx scripts/unit-tests.ts",
+    "verify": "npm run build && npm run test && cross-env KMB_WORKSPACE_DIR=.tmp/verify-workspace tsx scripts/verify-export.ts",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac dmg",
+    "dist:win": "npm run build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/legacy-modes": "^6.5.3",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.43.0",
+    "@uiw/react-codemirror": "^4.25.10",
+    "express": "^5.2.1",
+    "lucide-react": "^1.17.0",
+    "mathjax": "^4.1.2",
+    "multer": "^2.1.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^10.0.0",
+    "cross-env": "^10.1.0",
+    "electron": "^42.3.3",
+    "electron-builder": "^26.15.2",
+    "tsx": "^4.22.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.14",
+    "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.kaoyanmathbank.app",
+    "productName": "Kaoyan Math Bank",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "build/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.education",
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

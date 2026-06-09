@@ -1,0 +1,9 @@
+.DS_Store
+node_modules/
+build/
+dist/
+release/
+.app-data/
+.tmp/
+exports/
+public/vendor/mathjax/
