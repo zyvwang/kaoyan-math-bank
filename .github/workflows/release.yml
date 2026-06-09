@@ -90,11 +90,12 @@ jobs:
       - name: Publish draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" artifacts/**/* --clobber
+          if gh release view "$TAG_NAME" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" artifacts/**/* --repo "$REPO" --clobber
           else
-            gh release create "$TAG_NAME" artifacts/**/* --draft --generate-notes --title "$TAG_NAME"
+            gh release create "$TAG_NAME" artifacts/**/* --repo "$REPO" --draft --generate-notes --title "$TAG_NAME"
           fi
