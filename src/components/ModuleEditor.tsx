@@ -1,20 +1,20 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { ImagePlus } from "lucide-react";
 import { moduleLabels } from "../constants.js";
-import type { QuestionItem, TexField } from "../../shared/types.js";
+import type { ModuleKind, QuestionItem } from "../../shared/types.js";
 import { LatexPreview } from "./LatexPreview.js";
 
 const LatexEditor = lazy(() => import("./LatexEditor.js"));
 
 interface ModuleEditorProps {
-  field: TexField;
+  kind: ModuleKind;
   value: string;
   item: QuestionItem;
   onChange: (value: string) => void;
   onUpload: (file: File) => Promise<void>;
 }
 
-export function ModuleEditor({ field, value, item, onChange, onUpload }: ModuleEditorProps) {
+export function ModuleEditor({ kind, value, item, onChange, onUpload }: ModuleEditorProps) {
   const fileInput = useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -32,7 +32,7 @@ export function ModuleEditor({ field, value, item, onChange, onUpload }: ModuleE
   return (
     <article className="modulePanel">
       <header>
-        <h2>{moduleLabels[field]}</h2>
+        <h2>{moduleLabels[kind]}</h2>
         <button className="iconButton" onClick={() => fileInput.current?.click()} title="插入图片">
           <ImagePlus size={17} />
         </button>

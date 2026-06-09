@@ -14,11 +14,14 @@ const appInfo: AppInfo = {
   appState: {
     version: 1,
     currentWorkspacePath: "/tmp/math-bank",
-    recentWorkspacePaths: ["/tmp/math-bank"]
+    recentWorkspacePaths: ["/tmp/math-bank", "/tmp/other-bank"]
   },
   currentWorkspaceName: "math-bank",
   currentWorkspacePath: "/tmp/math-bank",
-  recentWorkspaces: [{ name: "math-bank", path: "/tmp/math-bank", exists: true }],
+  recentWorkspaces: [
+    { name: "math-bank", path: "/tmp/math-bank", exists: true },
+    { name: "other-bank", path: "/tmp/other-bank", exists: true }
+  ],
   texStatus: {
     available: true,
     command: "latexmk",
@@ -30,7 +33,7 @@ const appInfo: AppInfo = {
 };
 
 const bank: Bank = {
-  version: 1,
+  version: 2,
   settings: {
     pageSize: "a4",
     spacing: { item: "1.0em", module: "0.45em" },
@@ -44,9 +47,11 @@ const bank: Bank = {
       chapter: "高等数学/极限",
       tags: ["极限"],
       star: 3,
-      questionTex: "求极限 $x$。",
-      solutionTex: "答案。",
-      noteTex: "备注。",
+      modules: {
+        question: { tex: "求极限 $x$。" },
+        solution: { tex: "答案。" },
+        note: { tex: "备注。" }
+      },
       assets: [],
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
@@ -58,9 +63,11 @@ const bank: Bank = {
       chapter: "线性代数/矩阵",
       tags: ["矩阵"],
       star: 4,
-      questionTex: "求矩阵秩。",
-      solutionTex: "答案。",
-      noteTex: "",
+      modules: {
+        question: { tex: "求矩阵秩。" },
+        solution: { tex: "答案。" },
+        note: { tex: "" }
+      },
       assets: [],
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
@@ -74,6 +81,10 @@ beforeEach(() => {
 });
 
 describe("App UI", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("loads the workspace and filters items", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -106,6 +117,27 @@ describe("App UI", () => {
     });
   });
 
+  it("autosaves module edits as v2 modules", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("2024-1");
+
+    const editors = screen.getAllByLabelText("latex-editor");
+    await user.clear(editors[0]);
+    await user.type(editors[0], "新版题面");
+    await new Promise((resolve) => window.setTimeout(resolve, 650));
+
+    await waitFor(() => {
+      const saveCall = vi.mocked(fetch).mock.calls.find(
+        ([url, init]) => String(url) === "/api/bank" && init?.method === "PUT"
+      );
+      expect(saveCall).toBeTruthy();
+      const payload = JSON.parse(String(saveCall?.[1]?.body)) as Bank;
+      expect(payload.version).toBe(2);
+      expect(payload.items[0].modules.question.tex).toBe("新版题面");
+    });
+  });
+
   it("uploads an image into the active module", async () => {
     const user = userEvent.setup();
     const { container } = render(<App />);
@@ -135,6 +167,29 @@ describe("App UI", () => {
     });
     expect(await screen.findByText(/导出完成/)).toBeInTheDocument();
   });
+
+  it("saves before switching workspaces", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("2024-1");
+
+    await user.click(screen.getByRole("button", { name: /other-bank/ }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/workspaces/switch",
+        expect.objectContaining({
+          method: "POST"
+        })
+      );
+    });
+
+    const calls = vi.mocked(fetch).mock.calls;
+    const saveIndex = calls.findIndex(([url, init]) => String(url) === "/api/bank" && init?.method === "PUT");
+    const switchIndex = calls.findIndex(([url]) => String(url) === "/api/workspaces/switch");
+    expect(saveIndex).toBeGreaterThan(-1);
+    expect(switchIndex).toBeGreaterThan(saveIndex);
+  });
 });
 
 async function handleFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -142,6 +197,17 @@ async function handleFetch(input: RequestInfo | URL, init?: RequestInit): Promis
   if (url === "/api/app") return json(appInfo);
   if (url === "/api/bank" && !init) return json(bank);
   if (url === "/api/bank" && init?.method === "PUT") return json(bank);
+  if (url === "/api/workspaces/switch") {
+    return json({
+      ...appInfo,
+      currentWorkspaceName: "other-bank",
+      currentWorkspacePath: "/tmp/other-bank",
+      appState: {
+        ...appInfo.appState,
+        currentWorkspacePath: "/tmp/other-bank"
+      }
+    });
+  }
   if (url === "/api/assets") {
     return json({
       asset: {

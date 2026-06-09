@@ -35,9 +35,11 @@ const items: QuestionItem[] = [
     chapter: "高等数学/极限",
     tags: ["极限", "等价无穷小"],
     star: 2,
-    questionTex: "求极限 $\\lim_{x\\to 0}\\frac{\\sin x}{x}$。",
-    solutionTex: "由基本极限可得 $\\lim_{x\\to 0}\\frac{\\sin x}{x}=1$。",
-    noteTex: "注意这是考研数学一常用基本极限。",
+    modules: {
+      question: { tex: "求极限 $\\lim_{x\\to 0}\\frac{\\sin x}{x}$。" },
+      solution: { tex: "由基本极限可得 $\\lim_{x\\to 0}\\frac{\\sin x}{x}=1$。" },
+      note: { tex: "注意这是考研数学一常用基本极限。" }
+    },
     assets: [],
     createdAt: now,
     updatedAt: now
@@ -49,10 +51,14 @@ const items: QuestionItem[] = [
     chapter: "线性代数/矩阵",
     tags: ["矩阵"],
     star: 4,
-    questionTex:
-      "观察下图并判断矩阵秩。\n\n\\begin{center}\\includegraphics[width=0.15\\linewidth]{assets/verify-sample.png}\\end{center}",
-    solutionTex: "图片引用用于验证素材复制和 graphicx 编译。",
-    noteTex: "实际使用中可上传题目截图或辅助图。",
+    modules: {
+      question: {
+        tex:
+          "观察下图并判断矩阵秩。\n\n\\begin{center}\\includegraphics[width=0.15\\linewidth]{assets/verify-sample.png}\\end{center}"
+      },
+      solution: { tex: "图片引用用于验证素材复制和 graphicx 编译。" },
+      note: { tex: "实际使用中可上传题目截图或辅助图。" }
+    },
     assets: [
       {
         id: "asset-verify",
@@ -74,10 +80,14 @@ const items: QuestionItem[] = [
     chapter: "高等数学/函数图像",
     tags: ["TikZ"],
     star: 5,
-    questionTex:
-      "\\begin{center}\\begin{tikzpicture}[scale=0.8]\\draw[->] (-0.2,0)--(2,0);\\draw[->] (0,-0.2)--(0,2);\\draw[domain=0:1.4,smooth,variable=\\x,blue] plot ({\\x},{\\x*\\x});\\end{tikzpicture}\\end{center}",
-    solutionTex: "TikZ 片段用于验证真实编译检查。",
-    noteTex: "快速预览不渲染 TikZ，以 PDF 编译为准。",
+    modules: {
+      question: {
+        tex:
+          "\\begin{center}\\begin{tikzpicture}[scale=0.8]\\draw[->] (-0.2,0)--(2,0);\\draw[->] (0,-0.2)--(0,2);\\draw[domain=0:1.4,smooth,variable=\\x,blue] plot ({\\x},{\\x*\\x});\\end{tikzpicture}\\end{center}"
+      },
+      solution: { tex: "TikZ 片段用于验证真实编译检查。" },
+      note: { tex: "快速预览不渲染 TikZ，以 PDF 编译为准。" }
+    },
     assets: [],
     createdAt: now,
     updatedAt: now

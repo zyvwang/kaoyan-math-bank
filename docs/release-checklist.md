@@ -8,7 +8,8 @@ Use this checklist before producing a public macOS DMG or Windows NSIS installer
 2. Run `npm run verify`.
 3. Confirm the Vite output keeps the main chunk separate from `LatexEditor`.
 4. If TeX is installed locally, confirm `scripts/verify-export.ts` compiles both `questions.pdf` and `full.pdf`.
-5. Launch the desktop app with `npm run desktop:dev` and smoke-test:
+5. For schema changes, run `npm run migrate:v2 -- <v1-workspace> --dry-run` and then migrate a disposable copy to confirm `bank.json.bak` is preserved.
+6. Launch the desktop app with `npm run desktop:dev` and smoke-test:
    - first workspace setup
    - editing and autosave
    - image upload

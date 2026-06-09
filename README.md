@@ -149,6 +149,22 @@ This layout makes the data easy to back up, move, or manage with your own sync t
 
 这种结构比较方便备份、迁移，也可以放进你自己的同步盘。如果你习惯用 Git 管理个人资料，也可以把自己的工作区单独纳入版本控制。软件本身会在应用数据目录里的 `app-state.json` 中记录最近工作区和可选的 TeX 路径覆盖。
 
+Current workspaces use `bank.json` schema `version: 2`, where the question, solution, and note snippets live under `modules.question.tex`, `modules.solution.tex`, and `modules.note.tex`. Older `version: 1` workspaces with `questionTex`, `solutionTex`, and `noteTex` are still readable and are normalized in memory. To rewrite an older workspace explicitly while keeping a `.bak` backup, run:
+
+当前工作区使用 `bank.json` 的 `version: 2` 结构，题目、解析、备注分别保存在 `modules.question.tex`、`modules.solution.tex`、`modules.note.tex`。旧版 `version: 1` 工作区中的 `questionTex`、`solutionTex`、`noteTex` 仍然可以读取，并会在内存中归一化。若要显式把旧工作区写成新版并保留 `.bak` 备份，可以运行：
+
+```bash
+npm run migrate:v2 -- "/path/to/workspace"
+```
+
+Preview the migration without writing:
+
+只预览迁移结果、不写入文件：
+
+```bash
+npm run migrate:v2 -- "/path/to/workspace" --dry-run
+```
+
 Workspace actions are intentionally explicit. The first sample workspace is not created silently; the app asks you where to put it. Later, the sidebar lets you create or open workspaces, move recent workspaces up and down, reveal a workspace in Finder or File Explorer, and delete one after confirmation. “Create” makes a new workspace folder with `bank.json`, `assets/`, `exports/`, and `.tmp/`; “Open” expects an existing workspace folder that already contains `bank.json`. In the desktop app, deleting a workspace moves the folder to the system Trash or Recycle Bin.
 
 工作区操作会尽量让用户知道自己在改哪里。第一次创建示例工作区时，软件不会偷偷选位置，而是会先询问你放在哪里。之后可以在侧栏中新建或打开工作区，对最近工作区上下排序，在 Finder 或文件管理器中显示工作区，也可以确认后删除工作区。“新建”会创建一个包含 `bank.json`、`assets/`、`exports/`、`.tmp/` 的新工作区；“打开”用于选择已经包含 `bank.json` 的已有工作区。桌面版删除工作区时，会把文件夹移入系统废纸篓或回收站。

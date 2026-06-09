@@ -5,9 +5,9 @@ import type {
   CompileResponse,
   ExportOrderMode,
   ExportResponse,
+  ModuleKind,
   QuestionAsset,
-  QuestionItem,
-  TexField
+  QuestionItem
 } from "../../shared/types.js";
 import { appendTex } from "../utils/form.js";
 
@@ -56,9 +56,9 @@ export async function saveTexPath(texPath: string): Promise<AppInfo> {
   return postJson<AppInfo>("/api/tex-path", { texPath });
 }
 
-export async function uploadQuestionAsset(field: TexField, item: QuestionItem, file: File): Promise<{
+export async function uploadQuestionAsset(kind: ModuleKind, item: QuestionItem, file: File): Promise<{
   asset: QuestionAsset;
-  patch: Pick<QuestionItem, "assets"> & Partial<Record<TexField, string>>;
+  patch: Pick<QuestionItem, "assets" | "modules">;
 }> {
   const formData = new FormData();
   formData.append("file", file);
@@ -68,7 +68,13 @@ export async function uploadQuestionAsset(field: TexField, item: QuestionItem, f
     asset: data.asset,
     patch: {
       assets: [...item.assets, data.asset],
-      [field]: appendTex(item[field], data.insertText)
+      modules: {
+        ...item.modules,
+        [kind]: {
+          ...item.modules[kind],
+          tex: appendTex(item.modules[kind].tex, data.insertText)
+        }
+      }
     }
   };
 }

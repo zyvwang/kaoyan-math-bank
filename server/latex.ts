@@ -244,27 +244,27 @@ function basePreamble(): string {
 function renderQuestionOnlyItem(item: QuestionItem, number: number, settings: LatexSettings): string {
   const source = item.sourceNumber ? `\\hfill {\\small 原编号：${escapeLatexText(item.sourceNumber)}}` : "";
   return String.raw`\subsection*{第 ${number} 题 ${source}}
-${stripDocumentCommands(item.questionTex)}
+${stripDocumentCommands(item.modules.question.tex)}
 
 \vspace{${settings.spacing.item}}`;
 }
 
 function renderFullItem(item: QuestionItem, number: number, settings: LatexSettings): string {
   const source = item.sourceNumber ? `\\hfill {\\small 原编号：${escapeLatexText(item.sourceNumber)}}` : "";
-  return String.raw`\subsection*{第 ${number} 题 ${source}}
+return String.raw`\subsection*{第 ${number} 题 ${source}}
 \textbf{题目}
 
-${stripDocumentCommands(item.questionTex)}
+${stripDocumentCommands(item.modules.question.tex)}
 
 \vspace{${settings.spacing.module}}
 \textbf{解析}
 
-${stripDocumentCommands(item.solutionTex)}
+${stripDocumentCommands(item.modules.solution.tex)}
 
 \vspace{${settings.spacing.module}}
 \textbf{备注}
 
-${stripDocumentCommands(item.noteTex)}
+${stripDocumentCommands(item.modules.note.tex)}
 
 \vspace{${settings.spacing.item}}`;
 }

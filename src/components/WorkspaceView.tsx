@@ -11,9 +11,9 @@ import {
   Settings,
   Trash2
 } from "lucide-react";
-import { STAR_RATINGS } from "../constants.js";
+import { MODULE_KINDS, STAR_RATINGS } from "../constants.js";
 import type { QuestionBankController } from "../hooks/useQuestionBankApp.js";
-import type { ExportOrderMode, TexField } from "../../shared/types.js";
+import type { ExportOrderMode } from "../../shared/types.js";
 import { asStarRating, parseTags, renderStars } from "../utils/form.js";
 import { ModuleEditor } from "./ModuleEditor.js";
 
@@ -178,14 +178,21 @@ function ActiveWorkspace({ app }: { app: QuestionBankController }) {
       </details>
 
       <section className="moduleStack">
-        {(["questionTex", "solutionTex", "noteTex"] as TexField[]).map((field) => (
+        {MODULE_KINDS.map((kind) => (
           <ModuleEditor
-            key={field}
-            field={field}
-            value={activeItem[field]}
+            key={kind}
+            kind={kind}
+            value={activeItem.modules[kind].tex}
             item={activeItem}
-            onChange={(value) => app.updateItem(activeItem.id, { [field]: value })}
-            onUpload={(file) => app.uploadAsset(field, file)}
+            onChange={(value) =>
+              app.updateItem(activeItem.id, {
+                modules: {
+                  ...activeItem.modules,
+                  [kind]: { ...activeItem.modules[kind], tex: value }
+                }
+              })
+            }
+            onUpload={(file) => app.uploadAsset(kind, file)}
           />
         ))}
       </section>

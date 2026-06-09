@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { access, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { getDefaultWorkspaceRoot } from "../server/storage.js";
+import { getDefaultWorkspaceRoot, normalizeBank } from "../server/storage.js";
 
 const [legacyProjectPathArg, targetWorkspacePathArg] = process.argv.slice(2);
 
@@ -24,7 +24,7 @@ await mkdir(targetAssetsPath, { recursive: true });
 await mkdir(path.join(targetWorkspacePath, "exports"), { recursive: true });
 await mkdir(path.join(targetWorkspacePath, ".tmp"), { recursive: true });
 
-const bankJson = JSON.parse(await readFile(sourceBankPath, "utf8"));
+const bankJson = normalizeBank(JSON.parse(await readFile(sourceBankPath, "utf8")));
 await writeFile(path.join(targetWorkspacePath, "bank.json"), `${JSON.stringify(bankJson, null, 2)}\n`, "utf8");
 
 try {

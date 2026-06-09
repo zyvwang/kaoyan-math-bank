@@ -8,6 +8,14 @@ export interface QuestionAsset {
   uploadedAt: string;
 }
 
+export interface QuestionModule {
+  tex: string;
+}
+
+export type ModuleKind = "question" | "solution" | "note";
+
+export type QuestionModules = Record<ModuleKind, QuestionModule>;
+
 export interface QuestionItem {
   id: string;
   order: number;
@@ -15,9 +23,7 @@ export interface QuestionItem {
   chapter: string;
   tags: string[];
   star: StarRating;
-  questionTex: string;
-  solutionTex: string;
-  noteTex: string;
+  modules: QuestionModules;
   assets: QuestionAsset[];
   createdAt: string;
   updatedAt: string;
@@ -33,7 +39,7 @@ export interface LatexSettings {
 }
 
 export interface Bank {
-  version: 1;
+  version: 2;
   settings: LatexSettings;
   items: QuestionItem[];
 }
@@ -127,6 +133,6 @@ export interface ApiErrorResponse {
   error: string;
 }
 
-export type TexField = "questionTex" | "solutionTex" | "noteTex";
+export type TexField = ModuleKind;
 export type ExportOrderMode = "normal" | "random";
 export type StarRating = 1 | 2 | 3 | 4 | 5;

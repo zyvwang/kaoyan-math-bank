@@ -16,7 +16,7 @@ The shared API and data contracts live in `shared/`. Frontend and backend module
 ## Frontend Boundaries
 
 - `src/App.tsx` is only the composition root.
-- `src/hooks/useQuestionBankApp.ts` owns workspace state, derived lists, persistence, selection, compile, and export actions.
+- `src/hooks/useQuestionBankApp.ts` is the facade that composes focused hooks for workspace state, derived lists, persistence, selection, reordering, compile, and export actions.
 - `src/components/` contains focused view components for setup, sidebar, workspace, module editors, preview, and overlays.
 - CodeMirror is isolated in `src/components/LatexEditor.tsx` and lazy-loaded by `ModuleEditor`, keeping the initial Vite bundle smaller.
 - `src/api/client.ts` is the only place that should call `fetch` for app API routes.
@@ -29,7 +29,9 @@ The shared API and data contracts live in `shared/`. Frontend and backend module
 
 ## Data Safety
 
-`bank.json` and `app-state.json` are written through temp-file rename. When replacing an existing file, the previous version is kept as `<file>.bak`. The workspace schema remains `version: 1`.
+`bank.json` and `app-state.json` are written through temp-file rename. When replacing an existing file, the previous version is kept as `<file>.bak`. The workspace schema is `version: 2`; version 1 banks are normalized into version 2 on read, and the explicit `npm run migrate:v2 -- <workspace>` command can rewrite an older workspace with a backup.
+
+In schema version 2, each question stores its three editable LaTeX snippets under `modules.question.tex`, `modules.solution.tex`, and `modules.note.tex`. This keeps module rendering, upload insertion, validation, compile, and export paths on one shared shape instead of parallel `questionTex`, `solutionTex`, and `noteTex` fields.
 
 ## Desktop Boundary
 

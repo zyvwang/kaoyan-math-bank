@@ -4,6 +4,7 @@ import type {
   ExportOrderMode,
   ExportRequest,
   LatexSettings,
+  ModuleKind,
   QuestionAsset,
   QuestionItem,
   TexPathRequest,
@@ -22,11 +23,12 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function validateBankPayload(value: unknown): ValidationResult<Bank> {
-  if (!isRecord(value)) return invalid("题库数据必须是对象。");
-  if (value.version !== 1) return invalid("题库版本必须为 1。");
-  if (!isRecord(value.settings)) return invalid("题库缺少 settings。");
-  if (!Array.isArray(value.items)) return invalid("题库 items 必须是数组。");
-  return { ok: true, value: value as unknown as Bank };
+  try {
+    return { ok: true, value: parseBank(value) };
+  } catch (error) {
+    if (error instanceof ValidationError) return invalid(error.message);
+    throw error;
+  }
 }
 
 export function validateWorkspacePathRequest(value: unknown, missingMessage = "缺少工作区路径。"): ValidationResult<WorkspacePathRequest> {
@@ -56,10 +58,19 @@ export function validateTexPathRequest(value: unknown): ValidationResult<TexPath
 }
 
 export function validateCompileItemRequest(value: unknown): ValidationResult<CompileItemRequest> {
-  if (!isRecord(value)) return invalid("请求体必须是对象。");
-  if (!isQuestionItem(value.item)) return invalid("缺少有效的当前题目。");
-  if (!isLatexSettings(value.settings)) return invalid("缺少有效的 LaTeX 设置。");
-  return { ok: true, value: { item: value.item, settings: value.settings } };
+  try {
+    if (!isRecord(value)) throw new ValidationError("请求体必须是对象。");
+    return {
+      ok: true,
+      value: {
+        item: parseQuestionItem(value.item, { allowLegacy: false }),
+        settings: parseLatexSettings(value.settings)
+      }
+    };
+  } catch (error) {
+    if (error instanceof ValidationError) return invalid(error.message);
+    throw error;
+  }
 }
 
 export function validateExportRequest(value: unknown): ValidationResult<ExportRequest> {
@@ -89,50 +100,113 @@ export function validateExportRequest(value: unknown): ValidationResult<ExportRe
   };
 }
 
-function isQuestionItem(value: unknown): value is QuestionItem {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.id === "string" &&
-    Number.isFinite(value.order) &&
-    typeof value.chapter === "string" &&
-    Array.isArray(value.tags) &&
-    value.tags.every((tag) => typeof tag === "string") &&
-    isStarRating(value.star) &&
-    typeof value.questionTex === "string" &&
-    typeof value.solutionTex === "string" &&
-    typeof value.noteTex === "string" &&
-    Array.isArray(value.assets) &&
-    value.assets.every(isQuestionAsset) &&
-    typeof value.createdAt === "string" &&
-    typeof value.updatedAt === "string"
-  );
+function parseBank(value: unknown): Bank {
+  if (!isRecord(value)) throw new ValidationError("题库数据必须是对象。");
+  if (value.version !== 1 && value.version !== 2) throw new ValidationError("题库版本必须为 1 或 2。");
+  if (!Array.isArray(value.items)) throw new ValidationError("题库 items 必须是数组。");
+  const allowLegacy = value.version === 1;
+  return {
+    version: 2,
+    settings: parseLatexSettings(value.settings),
+    items: value.items.map((item) => parseQuestionItem(item, { allowLegacy }))
+  };
 }
 
-function isQuestionAsset(value: unknown): value is QuestionAsset {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.id === "string" &&
-    typeof value.fileName === "string" &&
-    typeof value.originalName === "string" &&
-    typeof value.relativePath === "string" &&
-    typeof value.mimeType === "string" &&
-    Number.isFinite(value.size) &&
-    typeof value.uploadedAt === "string"
-  );
+function parseQuestionItem(value: unknown, options: { allowLegacy: boolean }): QuestionItem {
+  if (!isRecord(value)) throw new ValidationError("题目必须是对象。");
+  const sourceNumber = getOptionalStringField(value, "sourceNumber");
+  if (sourceNumber instanceof ValidationError) throw sourceNumber;
+  return {
+    id: requiredString(value, "id"),
+    order: requiredFiniteNumber(value, "order"),
+    sourceNumber,
+    chapter: requiredString(value, "chapter"),
+    tags: parseStringArray(value.tags, "tags"),
+    star: parseStarRating(value.star),
+    modules: parseModules(value, options.allowLegacy),
+    assets: parseAssets(value.assets),
+    createdAt: requiredString(value, "createdAt"),
+    updatedAt: requiredString(value, "updatedAt")
+  };
 }
 
-function isLatexSettings(value: unknown): value is LatexSettings {
-  if (!isRecord(value) || !isRecord(value.spacing)) return false;
-  return (
-    value.pageSize === "a4" &&
-    typeof value.preamble === "string" &&
-    typeof value.spacing.item === "string" &&
-    typeof value.spacing.module === "string"
-  );
+function parseModules(value: Record<string, unknown>, allowLegacy: boolean): QuestionItem["modules"] {
+  if (isRecord(value.modules)) {
+    return {
+      question: parseQuestionModule(value.modules.question, "question"),
+      solution: parseQuestionModule(value.modules.solution, "solution"),
+      note: parseQuestionModule(value.modules.note, "note")
+    };
+  }
+  if (!allowLegacy) throw new ValidationError("题目缺少有效的 modules。");
+  return {
+    question: { tex: requiredString(value, "questionTex") },
+    solution: { tex: requiredString(value, "solutionTex") },
+    note: { tex: requiredString(value, "noteTex") }
+  };
 }
 
-function isStarRating(value: unknown): boolean {
-  return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 5;
+function parseQuestionModule(value: unknown, kind: ModuleKind): { tex: string } {
+  if (!isRecord(value)) throw new ValidationError(`题目 ${kind} 模块必须是对象。`);
+  return { tex: requiredString(value, "tex") };
+}
+
+function parseAssets(value: unknown): QuestionAsset[] {
+  if (!Array.isArray(value)) throw new ValidationError("题目 assets 必须是数组。");
+  return value.map((asset) => parseQuestionAsset(asset));
+}
+
+function parseQuestionAsset(value: unknown): QuestionAsset {
+  if (!isRecord(value)) throw new ValidationError("素材必须是对象。");
+  return {
+    id: requiredString(value, "id"),
+    fileName: requiredString(value, "fileName"),
+    originalName: requiredString(value, "originalName"),
+    relativePath: requiredString(value, "relativePath"),
+    mimeType: requiredString(value, "mimeType"),
+    size: requiredFiniteNumber(value, "size"),
+    uploadedAt: requiredString(value, "uploadedAt")
+  };
+}
+
+function parseLatexSettings(value: unknown): LatexSettings {
+  if (!isRecord(value) || !isRecord(value.spacing)) throw new ValidationError("缺少有效的 LaTeX 设置。");
+  if (value.pageSize !== "a4") throw new ValidationError("pageSize 必须是 a4。");
+  return {
+    pageSize: "a4",
+    preamble: requiredString(value, "preamble"),
+    spacing: {
+      item: requiredString(value.spacing, "item"),
+      module: requiredString(value.spacing, "module")
+    }
+  };
+}
+
+function parseStarRating(value: unknown): QuestionItem["star"] {
+  const rating = Number(value);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new ValidationError("题目星级必须是 1 到 5 的整数。");
+  }
+  return rating as QuestionItem["star"];
+}
+
+function parseStringArray(value: unknown, key: string): string[] {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new ValidationError(`${key} 必须是字符串数组。`);
+  }
+  return value;
+}
+
+function requiredString(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  if (typeof value !== "string") throw new ValidationError(`${key} 必须是字符串。`);
+  return value;
+}
+
+function requiredFiniteNumber(record: Record<string, unknown>, key: string): number {
+  const value = record[key];
+  if (!Number.isFinite(value)) throw new ValidationError(`${key} 必须是数字。`);
+  return Number(value);
 }
 
 function optionalExportOrderMode(value: unknown): ExportOrderMode | undefined {

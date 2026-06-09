@@ -1,6 +1,6 @@
 {
   "name": "kaoyan-math-bank",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A local-first LaTeX question bank for kaoyan math study.",
   "author": "Kaoyan Math Bank contributors",
   "private": false,
@@ -20,6 +20,7 @@
     "start": "tsx server/index.ts",
     "start:prod": "node build/server/index.js",
     "migrate:legacy": "tsx scripts/migrate-legacy-workspace.ts",
+    "migrate:v2": "tsx scripts/migrate-v2-workspace.ts",
     "test:unit": "vitest run --config vitest.node.config.ts tests/unit",
     "test:api": "vitest run --config vitest.node.config.ts tests/api",
     "test:electron": "vitest run --config vitest.node.config.ts tests/electron",

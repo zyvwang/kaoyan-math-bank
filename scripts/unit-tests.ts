@@ -91,7 +91,10 @@ const latex = buildQuestionOnlyLatex(
     {
       ...items[0],
       sourceNumber: "source_1",
-      questionTex: "\\documentclass{article}\\begin{document}Body $x^2$\\end{document}"
+      modules: {
+        ...items[0].modules,
+        question: { tex: "\\documentclass{article}\\begin{document}Body $x^2$\\end{document}" }
+      }
     }
   ],
   bank.settings
@@ -163,9 +166,11 @@ function createItems(ids: string[]): QuestionItem[] {
     chapter: "chapter",
     tags: [],
     star: 3,
-    questionTex: `question ${id}`,
-    solutionTex: `solution ${id}`,
-    noteTex: `note ${id}`,
+    modules: {
+      question: { tex: `question ${id}` },
+      solution: { tex: `solution ${id}` },
+      note: { tex: `note ${id}` }
+    },
     assets: [],
     createdAt: fixedNow,
     updatedAt: fixedNow

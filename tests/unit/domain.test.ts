@@ -14,6 +14,7 @@ import {
   createSampleBank,
   createSampleWorkspace,
   moveWorkspace,
+  normalizeBank,
   readAppState,
   readBank,
   removeWorkspace,
@@ -81,7 +82,10 @@ describe("domain helpers", () => {
         {
           ...items[0],
           sourceNumber: "source_1",
-          questionTex: "\\documentclass{article}\\begin{document}Body $x^2$\\end{document}"
+          modules: {
+            ...items[0].modules,
+            question: { tex: "\\documentclass{article}\\begin{document}Body $x^2$\\end{document}" }
+          }
         }
       ],
       bank.settings
@@ -97,6 +101,46 @@ describe("domain helpers", () => {
 });
 
 describe("storage", () => {
+  it("migrates legacy v1 banks into v2 modules", () => {
+    const migrated = normalizeBank({
+      version: 1,
+      settings: createEmptyBank().settings,
+      items: [
+        {
+          id: "legacy",
+          order: 3,
+          sourceNumber: "2025-1",
+          chapter: "高等数学",
+          tags: ["极限"],
+          star: 4,
+          questionTex: "legacy question",
+          solutionTex: "legacy solution",
+          noteTex: "legacy note",
+          assets: [],
+          createdAt: fixedNow,
+          updatedAt: fixedNow
+        }
+      ]
+    });
+
+    equal(migrated.version, 2);
+    equal(migrated.items[0].order, 1);
+    equal(migrated.items[0].modules.question.tex, "legacy question");
+    equal(migrated.items[0].modules.solution.tex, "legacy solution");
+    equal(migrated.items[0].modules.note.tex, "legacy note");
+  });
+
+  it("keeps v2 module text intact when normalizing", () => {
+    const item = createItems(["v2"])[0];
+    const normalized = normalizeBank({
+      version: 2,
+      settings: createEmptyBank().settings,
+      items: [item]
+    });
+
+    deepStrictEqual(normalized.items[0].modules, item.modules);
+  });
+
   it("manages workspace state and bank data", async () => {
     const freshAppState = await readAppState();
     equal(freshAppState.currentWorkspacePath, undefined);
@@ -148,9 +192,11 @@ function createItems(ids: string[]): QuestionItem[] {
     chapter: "chapter",
     tags: [],
     star: 3,
-    questionTex: `question ${id}`,
-    solutionTex: `solution ${id}`,
-    noteTex: `note ${id}`,
+    modules: {
+      question: { tex: `question ${id}` },
+      solution: { tex: `solution ${id}` },
+      note: { tex: `note ${id}` }
+    },
     assets: [],
     createdAt: fixedNow,
     updatedAt: fixedNow
