@@ -132,9 +132,9 @@ describe("App UI", () => {
         ([url, init]) => String(url) === "/api/bank" && init?.method === "PUT"
       );
       expect(saveCall).toBeTruthy();
-      const payload = JSON.parse(String(saveCall?.[1]?.body)) as Bank;
-      expect(payload.version).toBe(2);
-      expect(payload.items[0].modules.question.tex).toBe("新版题面");
+      const payload = JSON.parse(String(saveCall?.[1]?.body)) as { bank: Bank };
+      expect(payload.bank.version).toBe(2);
+      expect(payload.bank.items[0].modules.question.tex).toBe("新版题面");
     });
   });
 
@@ -173,6 +173,9 @@ describe("App UI", () => {
     render(<App />);
     await screen.findByText("2024-1");
 
+    const sourceInput = screen.getByDisplayValue("2024-1");
+    await user.clear(sourceInput);
+    await user.type(sourceInput, "切换前修改");
     await user.click(screen.getByRole("button", { name: /other-bank/ }));
 
     await waitFor(() => {
@@ -190,13 +193,137 @@ describe("App UI", () => {
     expect(saveIndex).toBeGreaterThan(-1);
     expect(switchIndex).toBeGreaterThan(saveIndex);
   });
+
+  it("does not rewrite a clean bank when switching workspaces", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("2024-1");
+
+    await user.click(screen.getByRole("button", { name: /other-bank/ }));
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/workspaces/switch",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    expect(
+      vi.mocked(fetch).mock.calls.some(
+        ([url, init]) => String(url) === "/api/bank" && init?.method === "PUT"
+      )
+    ).toBe(false);
+  });
+
+  it("serializes saves and coalesces edits made during an in-flight request", async () => {
+    const user = userEvent.setup();
+    let resolveFirstSave: ((response: Response) => void) | undefined;
+    const firstSave = new Promise<Response>((resolve) => {
+      resolveFirstSave = resolve;
+    });
+    const saveBodies: Array<{ workspacePath: string; bank: Bank }> = [];
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input) === "/api/bank" && init?.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as { workspacePath: string; bank: Bank };
+        saveBodies.push(body);
+        if (saveBodies.length === 1) return firstSave;
+        return json({ workspacePath: body.workspacePath, revision: "revision-3", bank: body.bank });
+      }
+      return handleFetch(input, init);
+    });
+
+    render(<App />);
+    await screen.findByText("2024-1");
+    const sourceInput = screen.getByDisplayValue("2024-1");
+    await user.clear(sourceInput);
+    await user.type(sourceInput, "第一次修改");
+    await new Promise((resolve) => window.setTimeout(resolve, 650));
+    expect(saveBodies).toHaveLength(1);
+
+    await user.clear(sourceInput);
+    await user.type(sourceInput, "最终修改");
+    await new Promise((resolve) => window.setTimeout(resolve, 650));
+    expect(saveBodies).toHaveLength(1);
+
+    resolveFirstSave?.(
+      json({
+        workspacePath: saveBodies[0].workspacePath,
+        revision: "revision-2",
+        bank: saveBodies[0].bank
+      })
+    );
+    await waitFor(() => expect(saveBodies).toHaveLength(2));
+    expect(saveBodies[1].bank.items[0].sourceNumber).toBe("最终修改");
+  });
+
+  it("retains a failed save and retries it on demand", async () => {
+    const user = userEvent.setup();
+    let saveAttempts = 0;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input) === "/api/bank" && init?.method === "PUT") {
+        saveAttempts += 1;
+        const body = JSON.parse(String(init.body)) as { workspacePath: string; bank: Bank };
+        if (saveAttempts === 1) {
+          return json({ error: "题库已被其他程序修改。", code: "BANK_CONFLICT" }, 409);
+        }
+        return json({ workspacePath: body.workspacePath, revision: "revision-retried", bank: body.bank });
+      }
+      return handleFetch(input, init);
+    });
+
+    render(<App />);
+    await screen.findByText("2024-1");
+    const sourceInput = screen.getByDisplayValue("2024-1");
+    await user.clear(sourceInput);
+    await user.type(sourceInput, "等待重试");
+    await new Promise((resolve) => window.setTimeout(resolve, 650));
+
+    await user.click(await screen.findByRole("button", { name: "重试保存" }));
+    await waitFor(() => expect(saveAttempts).toBe(2));
+    expect(await screen.findByText("已保存")).toBeInTheDocument();
+  });
+
+  it("shows recovery actions instead of an endless loading screen", async () => {
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/bank" && !init) {
+        return json({ error: "bank.json 不是有效的 JSON。", code: "BANK_JSON_INVALID" }, 500);
+      }
+      if (url === "/api/recovery" && !init) {
+        return json({
+          candidates: [
+            {
+              id: "bank.json.bak",
+              label: "最近一次保存前的备份",
+              createdAt: "2026-01-01T00:00:00.000Z",
+              source: "backup"
+            }
+          ]
+        });
+      }
+      if (url === "/api/recovery" && init?.method === "POST") {
+        return json({ workspacePath: "/tmp/math-bank", revision: "recovered", bank });
+      }
+      return handleFetch(input, init);
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+    expect(await screen.findByText("磁盘数据没有被覆盖")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /最近一次保存前的备份/ }));
+    expect(await screen.findByText("2024-1")).toBeInTheDocument();
+  });
 });
 
 async function handleFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = String(input);
   if (url === "/api/app") return json(appInfo);
-  if (url === "/api/bank" && !init) return json(bank);
-  if (url === "/api/bank" && init?.method === "PUT") return json(bank);
+  if (url === "/api/bank" && !init) {
+    return json({ workspacePath: "/tmp/math-bank", revision: "revision-1", bank });
+  }
+  if (url === "/api/bank" && init?.method === "PUT") {
+    const request = JSON.parse(String(init.body)) as { workspacePath: string; bank: Bank };
+    return json({ workspacePath: request.workspacePath, revision: crypto.randomUUID(), bank: request.bank });
+  }
   if (url === "/api/workspaces/switch") {
     return json({
       ...appInfo,

@@ -1,25 +1,37 @@
 import { deepStrictEqual, equal, ok } from "node:assert";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { describe, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import {
   buildQuestionOnlyLatex,
+  buildFullLatex,
+  copyAssetsForItems,
   createLatexProcessEnv,
+  listExportFiles,
   orderItemsForExport,
+  sanitizeFileName,
   selectedItems
 } from "../../server/latex.js";
 import {
   appDataDir,
+  appStatePath,
+  cleanupOldTempDirs,
   createEmptyBank,
+  createEmptyWorkspace,
   createSampleBank,
   createSampleWorkspace,
+  listRecoveryCandidates,
   moveWorkspace,
   normalizeBank,
   readAppState,
   readBank,
+  readBankSnapshot,
+  recoverBank,
   removeWorkspace,
+  saveBankSnapshot,
   switchWorkspace,
-  writeBank,
+  updateAppState,
+  writeAppState,
   writeJsonFileAtomic
 } from "../../server/storage.js";
 import type { QuestionItem } from "../../shared/types.js";
@@ -93,10 +105,58 @@ describe("domain helpers", () => {
     ok(latex.includes("Body $x^2$"));
     ok(!latex.includes("\\documentclass{article}"));
     ok(latex.includes("\\documentclass[UTF8,12pt]{ctexart}"));
+    ok(buildFullLatex([], bank.settings).includes("暂无选中题目"));
+    ok(
+      buildFullLatex(
+        [{ ...items[0], sourceNumber: "a_b#c~d^e" }],
+        bank.settings
+      ).includes("a\\_b\\#c\\textasciitilde{}d\\textasciicircum{}e")
+    );
+    equal(sanitizeFileName(" ../bad:name  "), "bad-name");
+    ok(sanitizeFileName("...").startsWith("export-"));
 
     const latexEnv = createLatexProcessEnv("/Library/TeX/texbin/latexmk");
     const pathKey = Object.keys(latexEnv).find((key) => key.toLowerCase() === "path") ?? "PATH";
     ok(latexEnv[pathKey]?.split(path.delimiter).includes("/Library/TeX/texbin"));
+  });
+
+  it("copies only existing assets and lists export files", async () => {
+    const sourceWorkspace = path.resolve(".tmp/vitest-assets-workspace");
+    const targetDir = path.resolve(".tmp/vitest-assets-target");
+    await rm(sourceWorkspace, { recursive: true, force: true });
+    await rm(targetDir, { recursive: true, force: true });
+    await mkdir(path.join(sourceWorkspace, "assets"), { recursive: true });
+    await writeFile(path.join(sourceWorkspace, "assets", "exists.png"), "image", "utf8");
+    const item = {
+      ...createItems(["asset"])[0],
+      assets: [
+        {
+          id: "asset-existing",
+          fileName: "exists.png",
+          originalName: "exists.png",
+          relativePath: "assets/exists.png",
+          mimeType: "image/png",
+          size: 5,
+          uploadedAt: fixedNow
+        },
+        {
+          id: "asset-missing",
+          fileName: "missing.png",
+          originalName: "missing.png",
+          relativePath: "assets/missing.png",
+          mimeType: "image/png",
+          size: 5,
+          uploadedAt: fixedNow
+        }
+      ]
+    };
+    await copyAssetsForItems([item], targetDir, sourceWorkspace);
+    equal(await readFile(path.join(targetDir, "assets", "exists.png"), "utf8"), "image");
+    await writeFile(path.join(targetDir, "questions.tex"), "tex", "utf8");
+    await writeFile(path.join(targetDir, "questions.pdf"), "pdf", "utf8");
+    await writeFile(path.join(targetDir, "ignored.log"), "log", "utf8");
+    deepStrictEqual(await listExportFiles(targetDir), ["questions.pdf", "questions.tex"]);
+    deepStrictEqual(await listExportFiles(path.join(targetDir, "missing")), []);
   });
 });
 
@@ -149,12 +209,17 @@ describe("storage", () => {
 
     const initialBank = await readBank();
     equal(initialBank.items.length, 2);
-    await writeBank(createEmptyBank());
+    const initialSnapshot = await readBankSnapshot();
+    await saveBankSnapshot({
+      workspacePath,
+      baseRevision: initialSnapshot.revision,
+      bank: createEmptyBank()
+    });
     const emptyBank = await readBank();
     equal(emptyBank.items.length, 0);
 
-    await switchWorkspace(workspacePathB);
-    await switchWorkspace(workspacePathC);
+    await createEmptyWorkspace(workspacePathB);
+    await createEmptyWorkspace(workspacePathC);
     await moveWorkspace(workspacePathC, 1);
     const movedCurrentState = await readAppState();
     equal(movedCurrentState.currentWorkspacePath, workspacePathC);
@@ -177,6 +242,105 @@ describe("storage", () => {
     const backup = JSON.parse(await readFile(`${filePath}.bak`, "utf8")) as { value: string };
     equal(current.value, "second");
     equal(backup.value, "first");
+  });
+
+  it("rejects stale saves and restores a valid backup after corruption", async () => {
+    await createSampleWorkspace(workspacePath);
+    const snapshot = await readBankSnapshot();
+    const changed = {
+      ...snapshot.bank,
+      items: snapshot.bank.items.map((item, index) =>
+        index === 0 ? { ...item, chapter: "已修改章节" } : item
+      )
+    };
+    const saved = await saveBankSnapshot({
+      workspacePath,
+      baseRevision: snapshot.revision,
+      bank: changed
+    });
+    ok(saved.revision !== snapshot.revision);
+    equal(saved.bank.items[0].chapter, "已修改章节");
+
+    await expectStorageError(
+      () =>
+        saveBankSnapshot({
+          workspacePath,
+          baseRevision: snapshot.revision,
+          bank: snapshot.bank
+        }),
+      "BANK_CONFLICT"
+    );
+
+    const candidates = await listRecoveryCandidates();
+    ok(candidates.some((candidate) => candidate.source === "backup"));
+    ok(candidates.some((candidate) => candidate.source === "history"));
+
+    await writeFile(path.join(workspacePath, "bank.json"), "{ broken", "utf8");
+    await expectStorageError(() => readBank(), "BANK_JSON_INVALID");
+    const recovered = await recoverBank("bank.json.bak");
+    equal(recovered.bank.items[0].chapter, snapshot.bank.items[0].chapter);
+    const preservedBackup = JSON.parse(
+      await readFile(path.join(workspacePath, "bank.json.bak"), "utf8")
+    ) as { items: QuestionItem[] };
+    equal(preservedBackup.items[0].chapter, snapshot.bank.items[0].chapter);
+    await expectStorageError(() => recoverBank("missing.json"), "RECOVERY_CANDIDATE_INVALID");
+  });
+
+  it("does not create a missing workspace when switching", async () => {
+    await expectStorageError(() => switchWorkspace(workspacePathB), "WORKSPACE_MISSING");
+    await expect(rm(workspacePathB, { recursive: true, force: false })).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+  });
+
+  it("serializes concurrent app-state updates without losing fields", async () => {
+    const first = updateAppState(async (state) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { ...state, texPathOverride: "/tmp/latexmk" };
+    });
+    const second = updateAppState((state) => ({
+      ...state,
+      recentWorkspacePaths: [workspacePathB, ...state.recentWorkspacePaths]
+    }));
+
+    await Promise.all([first, second]);
+    const state = await readAppState();
+    equal(state.texPathOverride, "/tmp/latexmk");
+    deepStrictEqual(state.recentWorkspacePaths, [workspacePathB]);
+  });
+
+  it("falls back to the previous app-state backup when the primary JSON is damaged", async () => {
+    await writeAppState({
+      version: 1,
+      currentWorkspacePath: workspacePath,
+      recentWorkspacePaths: [workspacePath]
+    });
+    await writeAppState({
+      version: 1,
+      currentWorkspacePath: workspacePathB,
+      recentWorkspacePaths: [workspacePathB]
+    });
+    await writeFile(appStatePath, "{ broken", "utf8");
+
+    const state = await readAppState();
+    equal(state.currentWorkspacePath, workspacePath);
+    deepStrictEqual(state.recentWorkspacePaths, [workspacePath]);
+  });
+
+  it("cleans only expired temporary compile directories", async () => {
+    await createEmptyWorkspace(workspacePath);
+    const oldDir = path.join(workspacePath, ".tmp", "old");
+    const recentDir = path.join(workspacePath, ".tmp", "recent");
+    await Promise.all([
+      mkdir(oldDir, { recursive: true }),
+      mkdir(recentDir, { recursive: true })
+    ]);
+    const oldTime = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    await utimes(oldDir, oldTime, oldTime);
+
+    await cleanupOldTempDirs(workspacePath);
+    await expect(stat(oldDir)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(recentDir)).resolves.toBeDefined();
   });
 });
 
@@ -201,4 +365,17 @@ function createItems(ids: string[]): QuestionItem[] {
     createdAt: fixedNow,
     updatedAt: fixedNow
   }));
+}
+
+async function expectStorageError(action: () => Promise<unknown>, code: string) {
+  try {
+    await action();
+  } catch (error) {
+    equal(
+      typeof error === "object" && error !== null && "code" in error ? error.code : undefined,
+      code
+    );
+    return;
+  }
+  throw new Error(`Expected storage error: ${code}`);
 }

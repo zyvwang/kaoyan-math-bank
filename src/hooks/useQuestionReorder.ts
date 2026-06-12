@@ -25,6 +25,7 @@ interface QuestionReorderOptions {
   setSelectedIds: Dispatch<SetStateAction<Set<string>>>;
   updateBank: (updater: (current: Bank) => Bank) => void;
   clearFilters: () => void;
+  workspacePath: string;
 }
 
 export function useQuestionReorder({
@@ -35,7 +36,8 @@ export function useQuestionReorder({
   setNotice,
   setSelectedIds,
   updateBank,
-  clearFilters
+  clearFilters,
+  workspacePath
 }: QuestionReorderOptions) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
@@ -47,6 +49,29 @@ export function useQuestionReorder({
   const draggingIdRef = useRef<string | null>(null);
   const dropTargetRef = useRef<DropTarget | null>(null);
   const reorderInputRef = useRef<HTMLInputElement | null>(null);
+  const [deletedItem, setDeletedItem] = useState<{ item: QuestionItem; index: number } | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
+
+  function clearDeletedUndo() {
+    if (undoTimerRef.current !== null) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    setDeletedItem(null);
+  }
+
+  useEffect(() => {
+    if (undoTimerRef.current !== null) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    setDeletedItem(null);
+    return () => {
+      if (undoTimerRef.current !== null) {
+        window.clearTimeout(undoTimerRef.current);
+      }
+    };
+  }, [workspacePath]);
 
   const reorderDialogItem = useMemo(() => {
     return orderedItems.find((item) => item.id === reorderDialogId) ?? null;
@@ -183,6 +208,9 @@ export function useQuestionReorder({
   function deleteItem(id: string) {
     const deletedIndex = orderedItems.findIndex((item) => item.id === id);
     if (deletedIndex === -1) return;
+    const item = orderedItems[deletedIndex];
+    const label = item.sourceNumber || item.chapter || `第 ${deletedIndex + 1} 题`;
+    if (!window.confirm(`确定删除“${label}”吗？\n\n删除后可在 10 秒内撤销。`)) return;
     const remaining = orderedItems
       .filter((item) => item.id !== id)
       .map((remainingItem, index) => withOrder(remainingItem, index));
@@ -196,6 +224,27 @@ export function useQuestionReorder({
       currentActiveId === id ? remaining[Math.min(deletedIndex, remaining.length - 1)]?.id ?? null : currentActiveId
     );
     setReorderMenu(null);
+    clearDeletedUndo();
+    setDeletedItem({ item, index: deletedIndex });
+    undoTimerRef.current = window.setTimeout(clearDeletedUndo, 10_000);
+    setNotice({ type: "info", text: "题目已删除，可在 10 秒内撤销。" });
+  }
+
+  function undoDelete() {
+    if (!deletedItem) return;
+    updateBank((current) => {
+      if (current.items.some((item) => item.id === deletedItem.item.id)) return current;
+      const nextItems = [...current.items].sort((a, b) => a.order - b.order);
+      nextItems.splice(Math.min(deletedItem.index, nextItems.length), 0, deletedItem.item);
+      return {
+        ...current,
+        items: nextItems.map((item, index) => withOrder(item, index))
+      };
+    });
+    setSelectedIds((current) => new Set([...current, deletedItem.item.id]));
+    setActiveId(deletedItem.item.id);
+    clearDeletedUndo();
+    setNotice({ type: "ok", text: "已撤销删除。" });
   }
 
   function deleteActiveItem() {
@@ -329,7 +378,9 @@ export function useQuestionReorder({
     openReorderMenu,
     openAddMenu,
     startPointerDrag,
-    startMouseDrag
+    startMouseDrag,
+    canUndoDelete: Boolean(deletedItem),
+    undoDelete
   };
 }
 

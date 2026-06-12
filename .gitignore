@@ -7,3 +7,7 @@ release/
 .tmp/
 exports/
 public/vendor/mathjax/
+public/vendor/mathjax-fonts/
+coverage/
+test-results/
+playwright-report/

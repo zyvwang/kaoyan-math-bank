@@ -30,6 +30,11 @@ export function ensureMathJax(): Promise<void> {
   if (mathJaxPromise) return mathJaxPromise;
 
   window.MathJax = {
+    loader: {
+      paths: {
+        fonts: "/vendor/mathjax-fonts"
+      }
+    },
     tex: {
       inlineMath: [
         ["$", "$"],

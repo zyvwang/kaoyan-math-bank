@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { constants } from "node:fs";
 import { access, copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -17,9 +18,9 @@ export function sanitizeFileName(input: string): string {
     .normalize("NFKC")
     .replace(/[\\/:*?"<>|]/g, "-")
     .replace(/\s+/g, "-")
-    .replace(/^\.+/, "")
     .slice(0, 80)
-    .trim();
+    .trim()
+    .replace(/^[.-]+|[.-]+$/g, "");
   return cleaned || `export-${new Date().toISOString().slice(0, 10)}`;
 }
 
@@ -126,6 +127,7 @@ export async function compileLatex(texPath: string, cwd: string, timeoutMs = 45_
   }
   const args = [
     "-xelatex",
+    "-no-shell-escape",
     "-interaction=nonstopmode",
     "-halt-on-error",
     "-file-line-error",
@@ -135,13 +137,14 @@ export async function compileLatex(texPath: string, cwd: string, timeoutMs = 45_
   return new Promise((resolve) => {
     const child = spawn(latexmkCommand, args, {
       cwd,
-      env: createLatexProcessEnv(latexmkCommand)
+      env: createLatexProcessEnv(latexmkCommand),
+      detached: process.platform !== "win32"
     });
     let log = "";
     let settled = false;
     const timer = setTimeout(() => {
       if (!settled) {
-        child.kill("SIGTERM");
+        terminateProcessTree(child);
         settled = true;
         resolve({ ok: false, texPath, log: `${log}\nLaTeX compile timed out after ${timeoutMs}ms.` });
       }
@@ -167,6 +170,38 @@ export async function compileLatex(texPath: string, cwd: string, timeoutMs = 45_
       resolve({ ok, texPath, pdfPath: ok ? pdfPath : undefined, log: summarizeLog(log) });
     });
   });
+}
+
+function terminateProcessTree(child: ChildProcess) {
+  const pid = child.pid;
+  if (!pid) return;
+  if (process.platform === "win32") {
+    const killer = spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
+      windowsHide: true,
+      stdio: "ignore"
+    });
+    killer.unref();
+    return;
+  }
+  killUnixProcessTree(pid, "SIGTERM");
+  const forceKillTimer = setTimeout(() => {
+    if (child.exitCode === null && child.signalCode === null) {
+      killUnixProcessTree(pid, "SIGKILL");
+    }
+  }, 1_000);
+  forceKillTimer.unref();
+}
+
+function killUnixProcessTree(pid: number, signal: NodeJS.Signals) {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // The process already exited.
+    }
+  }
 }
 
 export async function detectTexInstallation(): Promise<TexStatus> {

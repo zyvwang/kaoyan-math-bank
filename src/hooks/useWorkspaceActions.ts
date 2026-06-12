@@ -113,6 +113,26 @@ export function useWorkspaceActions({
     }
   }
 
+  async function relocateWorkspace(workspacePath: string) {
+    const replacementPath = await pickWorkspaceDirectory(
+      "重新定位题库工作区",
+      "输入该题库工作区的新路径"
+    );
+    if (!replacementPath?.trim()) return;
+    setIsChangingWorkspace(true);
+    try {
+      await saveBeforeWorkspaceChange();
+      await openExistingWorkspace(replacementPath);
+      const nextAppInfo = await removeWorkspace(workspacePath);
+      await reloadWorkspace(nextAppInfo);
+      setNotice({ type: "ok", text: `已重新定位至：${nextAppInfo.currentWorkspaceName}` });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "重新定位工作区失败。" });
+    } finally {
+      setIsChangingWorkspace(false);
+    }
+  }
+
   async function moveWorkspaceInList(workspacePath: string, direction: "up" | "down") {
     try {
       const nextAppInfo = await moveWorkspace(workspacePath, direction);
@@ -133,6 +153,9 @@ export function useWorkspaceActions({
 
     setIsChangingWorkspace(true);
     try {
+      if (workspacePath === appInfo?.currentWorkspacePath) {
+        await saveBeforeWorkspaceChange();
+      }
       if (canTrash && window.kmb?.trashPath) {
         await window.kmb.trashPath(workspacePath);
       }
@@ -176,6 +199,7 @@ export function useWorkspaceActions({
     createNewWorkspace,
     openWorkspace,
     switchToWorkspace,
+    relocateWorkspace,
     moveWorkspaceInList,
     deleteWorkspace,
     saveTexPathOverride,

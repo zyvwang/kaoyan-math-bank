@@ -83,8 +83,13 @@ export function useCompileExportActions({
         randomSeed: effectiveRandomSeed
       })) as ExportResponse & { error?: string };
       if (!data.ok) {
-        setNotice({ type: "error", text: data.error ?? "导出失败，查看编译日志摘要。" });
-        setCompileResult(data.results?.questions.ok ? data.results.full : data.results?.questions ?? null);
+        const failedResult = data.results?.questions.ok ? data.results.full : data.results?.questions;
+        setNotice({
+          type: "error",
+          text: data.error ?? "导出失败，查看编译日志摘要。",
+          href: failedResult?.texUrl
+        });
+        setCompileResult(failedResult ?? null);
         return;
       }
       setNotice({ type: "ok", text: `导出完成：${data.files.join("、")}`, href: data.exportUrl });

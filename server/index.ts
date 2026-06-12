@@ -3,45 +3,43 @@ import type { Server } from "node:http";
 import multer from "multer";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
 import {
   createEmptyWorkspace,
-  createWorkspace,
   createSampleWorkspace,
   ensureProjectDirs,
   getCurrentWorkspaceDirs,
+  listRecoveryCandidates,
   listRecentWorkspaces,
   moveWorkspace,
   openExistingWorkspace,
+  readBankSnapshot,
   removeWorkspace,
+  recoverBank,
   readAppState,
-  readBank,
   rootDir,
+  saveBankSnapshot,
+  StorageError,
   switchWorkspace,
   updateTexPathOverride,
-  workspaceNameFromPath,
-  writeBank
+  workspaceNameFromPath
 } from "./storage.js";
 import {
-  buildFullLatex,
-  buildQuestionOnlyLatex,
   compileLatex,
-  copyAssetsForItems,
   detectTexInstallation,
-  listExportFiles,
-  sanitizeFileName,
-  selectedItems,
   writeCurrentItemCheck
 } from "./latex.js";
-import type { AppInfo, QuestionAsset } from "../shared/types.js";
+import type { ApiErrorResponse, AppInfo } from "../shared/types.js";
 import {
-  validateBankPayload,
   validateCompileItemRequest,
   validateExportRequest,
+  validateRecoverBankRequest,
+  validateSaveBankRequest,
   validateTexPathRequest,
   validateWorkspaceMoveRequest,
   validateWorkspacePathRequest
 } from "../shared/validation.js";
+import { AssetUploadError, saveQuestionAsset } from "./asset-service.js";
+import { exportBank } from "./export-service.js";
 
 export interface ApiServerOptions {
   host?: string;
@@ -59,29 +57,24 @@ export function createApiApp(): express.Express {
   const app = express();
 
   const upload = multer({
-    storage: multer.diskStorage({
-      destination: async (_request, _file, callback) => {
-        try {
-          const { assetDir } = await getCurrentWorkspaceDirs();
-          await mkdir(assetDir, { recursive: true });
-          callback(null, assetDir);
-        } catch (error) {
-          callback(error instanceof Error ? error : new Error("无法打开素材目录。"), "");
-        }
-      },
-      filename: (_request, file, callback) => {
-        const extension = path.extname(file.originalname).toLowerCase() || ".png";
-        callback(null, `${crypto.randomUUID()}${extension}`);
-      }
-    }),
+    storage: multer.memoryStorage(),
     limits: {
       fileSize: 15 * 1024 * 1024
     },
     fileFilter: (_request, file, callback) => {
-      callback(null, file.mimetype.startsWith("image/"));
+      callback(null, ["image/png", "image/jpeg"].includes(file.mimetype));
     }
   });
 
+  app.use((_request, response, next) => {
+    if (!process.env.KMB_DEV_SERVER_URL) {
+      response.setHeader(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+      );
+    }
+    next();
+  });
   app.use(express.json({ limit: "8mb" }));
   app.use(rejectForeignMutatingOrigins);
   app.use("/assets", dynamicStatic("assetDir"));
@@ -98,7 +91,7 @@ export function createApiApp(): express.Express {
 
   app.get("/api/bank", async (_request, response, next) => {
     try {
-      response.json(await readBank());
+      response.json(await readBankSnapshot());
     } catch (error) {
       next(error);
     }
@@ -106,25 +99,12 @@ export function createApiApp(): express.Express {
 
   app.put("/api/bank", async (request, response, next) => {
     try {
-      const validation = validateBankPayload(request.body);
+      const validation = validateSaveBankRequest(request.body);
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "BANK_REQUEST_INVALID");
         return;
       }
-      response.json(await writeBank(validation.value));
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.post("/api/workspaces/create", async (request, response, next) => {
-    try {
-      if (!isRequestBodyObject(request.body)) {
-        response.status(400).json({ error: "请求体必须是对象。" });
-        return;
-      }
-      await createWorkspace(String(request.body.name ?? "New Bank"));
-      response.json(await buildAppInfo());
+      response.json(await saveBankSnapshot(validation.value));
     } catch (error) {
       next(error);
     }
@@ -134,7 +114,7 @@ export function createApiApp(): express.Express {
     try {
       const validation = validateWorkspacePathRequest(request.body, "缺少示例工作区路径。");
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "WORKSPACE_PATH_INVALID");
         return;
       }
       await createSampleWorkspace(validation.value.workspacePath);
@@ -148,7 +128,7 @@ export function createApiApp(): express.Express {
     try {
       const validation = validateWorkspacePathRequest(request.body, "缺少新工作区路径。");
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "WORKSPACE_PATH_INVALID");
         return;
       }
       await createEmptyWorkspace(validation.value.workspacePath);
@@ -162,7 +142,7 @@ export function createApiApp(): express.Express {
     try {
       const validation = validateWorkspacePathRequest(request.body);
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "WORKSPACE_PATH_INVALID");
         return;
       }
       await openExistingWorkspace(validation.value.workspacePath);
@@ -176,7 +156,7 @@ export function createApiApp(): express.Express {
     try {
       const validation = validateWorkspacePathRequest(request.body);
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "WORKSPACE_PATH_INVALID");
         return;
       }
       await removeWorkspace(validation.value.workspacePath);
@@ -190,7 +170,7 @@ export function createApiApp(): express.Express {
     try {
       const validation = validateWorkspaceMoveRequest(request.body);
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "WORKSPACE_MOVE_INVALID");
         return;
       }
       await moveWorkspace(validation.value.workspacePath, validation.value.direction === "down" ? 1 : -1);
@@ -204,7 +184,7 @@ export function createApiApp(): express.Express {
     try {
       const validation = validateWorkspacePathRequest(request.body);
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "WORKSPACE_PATH_INVALID");
         return;
       }
       await switchWorkspace(validation.value.workspacePath);
@@ -218,7 +198,7 @@ export function createApiApp(): express.Express {
     try {
       const validation = validateTexPathRequest(request.body);
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "TEX_PATH_INVALID");
         return;
       }
       await updateTexPathOverride(validation.value.texPath);
@@ -228,28 +208,34 @@ export function createApiApp(): express.Express {
     }
   });
 
+  app.get("/api/recovery", async (_request, response, next) => {
+    try {
+      response.json({ candidates: await listRecoveryCandidates() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/recovery", async (request, response, next) => {
+    try {
+      const validation = validateRecoverBankRequest(request.body);
+      if (!validation.ok || !validation.value) {
+        sendApiError(response, 400, validation.error, "RECOVERY_REQUEST_INVALID");
+        return;
+      }
+      response.json(await recoverBank(validation.value.candidateId));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/api/assets", upload.single("file"), async (request, response, next) => {
     try {
       if (!request.file) {
-        response.status(400).json({ error: "请选择图片文件。" });
+        sendApiError(response, 400, "请选择扩展名、MIME 和内容一致的 PNG 或 JPEG 图片。", "IMAGE_REQUIRED");
         return;
       }
-
-      const asset: QuestionAsset = {
-        id: crypto.randomUUID(),
-        fileName: request.file.filename,
-        originalName: request.file.originalname,
-        relativePath: `assets/${request.file.filename}`,
-        mimeType: request.file.mimetype,
-        size: request.file.size,
-        uploadedAt: new Date().toISOString()
-      };
-
-      response.json({
-        asset,
-        url: `/assets/${asset.fileName}`,
-        insertText: `\\begin{center}\n\\includegraphics[width=0.75\\linewidth]{assets/${asset.fileName}}\n\\end{center}`
-      });
+      response.json(await saveQuestionAsset(request.file));
     } catch (error) {
       next(error);
     }
@@ -259,7 +245,7 @@ export function createApiApp(): express.Express {
     try {
       const validation = validateCompileItemRequest(request.body);
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "COMPILE_REQUEST_INVALID");
         return;
       }
 
@@ -280,47 +266,12 @@ export function createApiApp(): express.Express {
     try {
       const validation = validateExportRequest(request.body);
       if (!validation.ok || !validation.value) {
-        response.status(400).json({ error: validation.error });
+        sendApiError(response, 400, validation.error, "EXPORT_REQUEST_INVALID");
         return;
       }
-      const bank = await readBank();
-      const ids = validation.value.itemIds;
-      const fileName = sanitizeFileName(validation.value.fileName);
-      const orderMode = validation.value.orderMode === "random" ? "random" : "normal";
-      const randomSeed = validation.value.randomSeed || fileName;
-      const items = selectedItems(bank, ids, { orderMode, randomSeed });
-
-      if (items.length === 0) {
-        response.status(400).json({ error: "请至少勾选一道题目。" });
-        return;
-      }
-
-      const { exportDir } = await getCurrentWorkspaceDirs();
-      const targetDir = path.join(exportDir, fileName);
-      await mkdir(targetDir, { recursive: true });
-      await copyAssetsForItems(items, targetDir);
-
-      const questionsTex = path.join(targetDir, "questions.tex");
-      const fullTex = path.join(targetDir, "full.tex");
-      await writeFile(questionsTex, buildQuestionOnlyLatex(items, bank.settings), "utf8");
-      await writeFile(fullTex, buildFullLatex(items, bank.settings), "utf8");
-
-      const questionsResult = await compileLatex(questionsTex, targetDir, 60_000);
-      const fullResult = await compileLatex(fullTex, targetDir, 60_000);
-      const ok = questionsResult.ok && fullResult.ok;
-      const files = await listExportFiles(targetDir);
-
-      response.status(ok ? 200 : 422).json({
-        ok,
-        exportName: fileName,
-        exportPath: targetDir,
-        exportUrl: `/exports/${encodeURIComponent(fileName)}/`,
-        files,
-        results: {
-          questions: questionsResult,
-          full: fullResult
-        }
-      });
+      const snapshot = await readBankSnapshot();
+      const result = await exportBank(snapshot.bank, snapshot.workspacePath, validation.value);
+      response.status(result.ok ? 200 : 422).json(result);
     } catch (error) {
       next(error);
     }
@@ -337,17 +288,28 @@ export function createApiApp(): express.Express {
 
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
     if (error instanceof multer.MulterError) {
-      response.status(400).json({ error: error.message });
+      sendApiError(response, 400, error.message, "UPLOAD_INVALID");
+      return;
+    }
+    if (error instanceof AssetUploadError) {
+      sendApiError(response, 400, error.message, error.code);
+      return;
+    }
+    if (error instanceof StorageError) {
+      sendApiError(response, error.status, error.message, error.code);
       return;
     }
     if (isClientInputError(error)) {
-      response.status(400).json({ error: error.message });
+      sendApiError(response, 400, error.message, "REQUEST_INVALID");
       return;
     }
     console.error(error);
-    response.status(500).json({
-      error: error instanceof Error ? error.message : "服务器内部错误。"
-    });
+    sendApiError(
+      response,
+      500,
+      error instanceof Error ? error.message : "服务器内部错误。",
+      "INTERNAL_ERROR"
+    );
   });
 
   return app;
@@ -370,25 +332,30 @@ function rejectForeignMutatingOrigins(
   }
 
   try {
-    const url = new URL(origin);
-    if (["127.0.0.1", "localhost", "::1"].includes(url.hostname)) {
+    const originUrl = new URL(origin);
+    const requestUrl = new URL(`${request.protocol}://${request.get("host")}`);
+    const devOrigin = process.env.KMB_DEV_SERVER_URL
+      ? new URL(process.env.KMB_DEV_SERVER_URL).origin
+      : "";
+    const allowedOrigins = new Set([requestUrl.origin, devOrigin].filter(Boolean));
+    if (isLoopbackHostname(requestUrl.hostname) && allowedOrigins.has(originUrl.origin)) {
       next();
       return;
     }
   } catch {
-    response.status(403).json({ error: "拒绝未知来源的写入请求。" });
+    sendApiError(response, 403, "拒绝未知来源的写入请求。", "ORIGIN_INVALID");
     return;
   }
 
-  response.status(403).json({ error: "拒绝非本机来源的写入请求。" });
+  sendApiError(response, 403, "拒绝非本机来源的写入请求。", "ORIGIN_FORBIDDEN");
 }
 
 function isMutatingMethod(method: string): boolean {
   return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
 }
 
-function isRequestBodyObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function isLoopbackHostname(hostname: string): boolean {
+  return ["127.0.0.1", "localhost", "::1"].includes(hostname);
 }
 
 function isClientInputError(error: unknown): error is Error {
@@ -451,6 +418,19 @@ async function toPublicTempUrl(filePath: string): Promise<string> {
   const { tempDir } = await getCurrentWorkspaceDirs();
   const relative = path.relative(tempDir, filePath).split(path.sep).map(encodeURIComponent).join("/");
   return `/tmp/${relative}`;
+}
+
+function sendApiError(
+  response: express.Response,
+  status: number,
+  error: string | undefined,
+  code: string
+) {
+  const payload: ApiErrorResponse = {
+    error: error ?? "请求无效。",
+    code
+  };
+  response.status(status).json(payload);
 }
 
 function isDirectRun(): boolean {

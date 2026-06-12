@@ -10,6 +10,32 @@ permissions:
   contents: write
 
 jobs:
+  verify-latex:
+    name: Linux TeX export verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install TeX Live
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y latexmk texlive-xetex texlive-lang-chinese texlive-pictures
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify real LaTeX exports
+        run: |
+          npm run build
+          KMB_WORKSPACE_DIR=.tmp/release-tex-workspace npx tsx scripts/verify-export.ts
+
   build-windows:
     name: Windows NSIS
     runs-on: windows-latest
@@ -29,8 +55,11 @@ jobs:
       - name: Run verification
         run: npm run verify
 
+      - name: Run desktop smoke test
+        run: npm run test:desktop
+
       - name: Build Windows installer
-        run: npm run dist:win
+        run: npx electron-builder --win nsis --publish never
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -61,8 +90,11 @@ jobs:
       - name: Run verification
         run: npm run verify
 
+      - name: Run desktop smoke test
+        run: npm run test:desktop
+
       - name: Build macOS DMG
-        run: npm run dist:mac
+        run: npx electron-builder --mac dmg --publish never
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -78,6 +110,7 @@ jobs:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/')
     needs:
+      - verify-latex
       - build-windows
       - build-macos
     runs-on: ubuntu-latest

@@ -1,5 +1,7 @@
 import type {
   Bank,
+  RecoverBankRequest,
+  SaveBankRequest,
   CompileItemRequest,
   ExportOrderMode,
   ExportRequest,
@@ -29,6 +31,31 @@ export function validateBankPayload(value: unknown): ValidationResult<Bank> {
     if (error instanceof ValidationError) return invalid(error.message);
     throw error;
   }
+}
+
+export function validateSaveBankRequest(value: unknown): ValidationResult<SaveBankRequest> {
+  try {
+    if (!isRecord(value)) throw new ValidationError("请求体必须是对象。");
+    return {
+      ok: true,
+      value: {
+        workspacePath: requiredNonEmptyString(value, "workspacePath"),
+        baseRevision: requiredRevision(value, "baseRevision"),
+        bank: parseBank(value.bank)
+      }
+    };
+  } catch (error) {
+    if (error instanceof ValidationError) return invalid(error.message);
+    throw error;
+  }
+}
+
+export function validateRecoverBankRequest(value: unknown): ValidationResult<RecoverBankRequest> {
+  if (!isRecord(value)) return invalid("请求体必须是对象。");
+  const candidateId = getStringField(value, "candidateId");
+  if (candidateId === undefined) return invalid("candidateId 必须是字符串。");
+  if (!candidateId) return invalid("缺少恢复候选。");
+  return { ok: true, value: { candidateId } };
 }
 
 export function validateWorkspacePathRequest(value: unknown, missingMessage = "缺少工作区路径。"): ValidationResult<WorkspacePathRequest> {
@@ -105,10 +132,18 @@ function parseBank(value: unknown): Bank {
   if (value.version !== 1 && value.version !== 2) throw new ValidationError("题库版本必须为 1 或 2。");
   if (!Array.isArray(value.items)) throw new ValidationError("题库 items 必须是数组。");
   const allowLegacy = value.version === 1;
+  const items = value.items.map((item) => parseQuestionItem(item, { allowLegacy }));
+  const ids = new Set<string>();
+  for (const item of items) {
+    if (ids.has(item.id)) throw new ValidationError(`题目 id 重复：${item.id}`);
+    ids.add(item.id);
+  }
   return {
     version: 2,
     settings: parseLatexSettings(value.settings),
-    items: value.items.map((item) => parseQuestionItem(item, { allowLegacy }))
+    items: items
+      .sort((left, right) => left.order - right.order)
+      .map((item, index) => ({ ...item, order: index + 1 }))
   };
 }
 
@@ -117,7 +152,7 @@ function parseQuestionItem(value: unknown, options: { allowLegacy: boolean }): Q
   const sourceNumber = getOptionalStringField(value, "sourceNumber");
   if (sourceNumber instanceof ValidationError) throw sourceNumber;
   return {
-    id: requiredString(value, "id"),
+    id: requiredNonEmptyString(value, "id"),
     order: requiredFiniteNumber(value, "order"),
     sourceNumber,
     chapter: requiredString(value, "chapter"),
@@ -132,6 +167,10 @@ function parseQuestionItem(value: unknown, options: { allowLegacy: boolean }): Q
 
 function parseModules(value: Record<string, unknown>, allowLegacy: boolean): QuestionItem["modules"] {
   if (isRecord(value.modules)) {
+    const invalidKind = Object.keys(value.modules).find(
+      (kind) => kind !== "question" && kind !== "solution" && kind !== "note"
+    );
+    if (invalidKind) throw new ValidationError(`题目包含无效模块：${invalidKind}`);
     return {
       question: parseQuestionModule(value.modules.question, "question"),
       solution: parseQuestionModule(value.modules.solution, "solution"),
@@ -158,11 +197,25 @@ function parseAssets(value: unknown): QuestionAsset[] {
 
 function parseQuestionAsset(value: unknown): QuestionAsset {
   if (!isRecord(value)) throw new ValidationError("素材必须是对象。");
+  const fileName = requiredString(value, "fileName");
+  const relativePath = requiredString(value, "relativePath");
+  if (
+    !fileName ||
+    fileName === "." ||
+    fileName === ".." ||
+    hasControlCharacter(fileName) ||
+    fileName !== pathBaseName(fileName)
+  ) {
+    throw new ValidationError("素材 fileName 必须是安全文件名。");
+  }
+  if (relativePath !== `assets/${fileName}`) {
+    throw new ValidationError("素材 relativePath 必须指向 assets 目录中的对应文件。");
+  }
   return {
     id: requiredString(value, "id"),
-    fileName: requiredString(value, "fileName"),
+    fileName,
     originalName: requiredString(value, "originalName"),
-    relativePath: requiredString(value, "relativePath"),
+    relativePath,
     mimeType: requiredString(value, "mimeType"),
     size: requiredFiniteNumber(value, "size"),
     uploadedAt: requiredString(value, "uploadedAt")
@@ -203,6 +256,20 @@ function requiredString(record: Record<string, unknown>, key: string): string {
   return value;
 }
 
+function requiredNonEmptyString(record: Record<string, unknown>, key: string): string {
+  const value = requiredString(record, key).trim();
+  if (!value) throw new ValidationError(`${key} 不能为空。`);
+  return value;
+}
+
+function requiredRevision(record: Record<string, unknown>, key: string): string {
+  const value = requiredString(record, key);
+  if (!/^[a-f0-9]{64}$/.test(value)) {
+    throw new ValidationError(`${key} 必须是 SHA-256 revision。`);
+  }
+  return value;
+}
+
 function requiredFiniteNumber(record: Record<string, unknown>, key: string): number {
   const value = record[key];
   if (!Number.isFinite(value)) throw new ValidationError(`${key} 必须是数字。`);
@@ -232,3 +299,14 @@ function invalid<T>(error: string): ValidationResult<T> {
 }
 
 export class ValidationError extends Error {}
+
+function pathBaseName(value: string): string {
+  return value.replace(/\\/g, "/").split("/").pop() ?? "";
+}
+
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 31 || code === 127;
+  });
+}

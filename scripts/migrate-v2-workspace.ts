@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { getWorkspaceDirs, normalizeBank, writeJsonFileAtomic } from "../server/storage.js";
+import { getWorkspaceDirs, writeJsonFileAtomic } from "../server/storage.js";
+import { validateBankPayload } from "../shared/validation.js";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -15,7 +16,11 @@ const workspacePath = path.resolve(workspacePathArg);
 const { bankPath } = getWorkspaceDirs(workspacePath);
 const raw = await readFile(bankPath, "utf8");
 const before = JSON.parse(raw) as { version?: unknown };
-const migrated = normalizeBank(before);
+const validation = validateBankPayload(before);
+if (!validation.ok || !validation.value) {
+  throw new Error(validation.error ?? "题库数据无效。");
+}
+const migrated = validation.value;
 
 if (dryRun) {
   console.log(`Dry run: ${bankPath}`);

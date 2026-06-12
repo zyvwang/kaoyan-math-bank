@@ -17,6 +17,8 @@ Kaoyan Math Bank 是一个本地桌面题库，用来整理考研数学刷题时
 - Reorder items by dragging, by arrow buttons, or by moving one item directly to item `N`.
 - Use multiple local workspaces. Each workspace has its own `bank.json`, images, temporary compile files, and exports.
 - Create, open, reveal, reorder, and delete workspaces from the sidebar.
+- Saves are serialized and revision-checked, and switching, exporting, or closing the desktop app waits for pending edits.
+- Recover a damaged `bank.json` from its immediate backup or a recent session history snapshot.
 
 - 题目、解析、备注只写 LaTeX 正文片段，公共宏包和宏命令统一放在全局导言区。
 - 编辑时能预览文字、公式和上传图片；遇到实时预览覆盖不了的内容，可以用“检查当前题”跑一次真实 XeLaTeX 编译。
@@ -25,6 +27,8 @@ Kaoyan Math Bank 是一个本地桌面题库，用来整理考研数学刷题时
 - 题序可以拖拽调整，也可以用上下按钮，或者直接把某一题移动到第 `N` 题。
 - 支持多个本地工作区。每个工作区单独保存 `bank.json`、图片、临时编译文件和导出文件。
 - 侧栏里可以新建、打开、显示、排序和删除工作区。
+- 保存请求会串行执行并校验磁盘版本；切换工作区、导出和关闭桌面应用前都会等待未完成编辑落盘。
+- `bank.json` 损坏时，可以从即时备份或最近的会话历史快照恢复。
 
 ## Requirements / 依赖
 
@@ -127,6 +131,10 @@ My Bank/
 
 `questions.*` 只包含题目模块。`full.*` 包含题目、解析、备注三个模块。
 
+Exports are compiled in a temporary staging directory. The final export folder is replaced only after both PDFs compile successfully, so a failed replacement does not destroy the previous successful export. Failed staging directories keep their `.tex` files and logs for diagnosis and are cleaned after seven days.
+
+导出会先在临时目录中完成素材复制和编译，两个 PDF 都成功后才替换最终目录。因此同名导出失败时，旧的成功版本不会被破坏。失败目录会保留 `.tex` 和日志用于排查，并在七天后清理。
+
 When you export with a random seed, the same seed and selection produce the same shuffled order. Exported items are numbered from `1` in the exported order, while the original source number is kept when the item has one.
 
 使用随机种子导出时，同一组题目和同一个种子会得到同样的乱序结果。导出文件会按导出顺序从 `1` 重新编号，同时尽量保留题目原本的编号或来源信息。
@@ -143,6 +151,8 @@ My Bank/
   assets/         # uploaded images / 上传图片
   exports/        # exported tex/pdf files / 导出文件
   .tmp/           # temporary compile files / 临时编译文件
+  .history/       # recent session snapshots / 最近会话快照
+  bank.json.bak   # previous atomic save / 上一次原子保存备份
 ```
 
 This layout makes the data easy to back up, move, or manage with your own sync tool. If you like version control, you can also put a personal workspace under Git. The app itself stores recent workspace paths and the optional TeX path override in `app-state.json` inside the application data directory.
@@ -169,6 +179,10 @@ Workspace actions are intentionally explicit. The first sample workspace is not 
 
 工作区操作会尽量让用户知道自己在改哪里。第一次创建示例工作区时，软件不会偷偷选位置，而是会先询问你放在哪里。之后可以在侧栏中新建或打开工作区，对最近工作区上下排序，在 Finder 或文件管理器中显示工作区，也可以确认后删除工作区。“新建”会创建一个包含 `bank.json`、`assets/`、`exports/`、`.tmp/` 的新工作区；“打开”用于选择已经包含 `bank.json` 的已有工作区。桌面版删除工作区时，会把文件夹移入系统废纸篓或回收站。
 
+Missing recent-workspace paths are never recreated automatically. The sidebar marks them as missing and lets you relocate or remove the entry. If startup cannot read `bank.json`, the recovery screen shows the concrete error and offers valid `bank.json.bak` and `.history/` candidates returned by the local server.
+
+最近工作区路径失效时，软件绝不会自动在原位置新建空题库。侧栏会标记路径缺失，并提供重新定位或移除入口。若启动时无法读取 `bank.json`，恢复页面会显示具体错误，并列出由本地服务校验过的 `bank.json.bak` 与 `.history/` 候选。
+
 To migrate an older prototype project that stores its bank at `data/bank.json`, run:
 
 如果要迁移旧原型项目中位于 `data/bank.json` 的题库，可以运行：
@@ -184,6 +198,10 @@ Install dependencies:
 ```bash
 npm install
 ```
+
+Development and CI use Node.js 24.
+
+开发和 CI 使用 Node.js 24。
 
 Run the browser development server:
 
@@ -206,6 +224,16 @@ npm run verify
 `npm run verify` builds the frontend and desktop/server output, runs unit tests, and checks sample LaTeX export compilation when TeX is available on the machine.
 
 `npm run verify` 会构建前端和桌面/服务端产物，运行单元测试，并在本机 TeX 可用时检查示例 LaTeX 导出能否编译为 PDF。
+
+Run coverage and the packaged Electron smoke test separately when working on persistence or desktop behavior:
+
+修改保存或桌面行为时，还应分别运行覆盖率和打包态 Electron 冒烟测试：
+
+```bash
+npm run test:coverage
+npm run build
+npm run test:desktop
+```
 
 ## Packaging / 打包
 

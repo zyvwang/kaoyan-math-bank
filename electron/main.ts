@@ -1,22 +1,51 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import type { IpcMainEvent, IpcMainInvokeEvent } from "electron";
+import { mkdirSync } from "node:fs";
 import type { Server } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const isDevelopment = Boolean(process.env.KMB_DEV_SERVER_URL);
+const configuredAppDataDir = process.env.KMB_APP_DATA_DIR?.trim();
+const isUnpackagedRuntime = !app.isPackaged;
+
+if (configuredAppDataDir) {
+  const appDataDir = path.resolve(configuredAppDataDir);
+  const sessionDataDir = path.join(appDataDir, "session");
+  mkdirSync(sessionDataDir, { recursive: true });
+  app.setPath("userData", appDataDir);
+  app.setPath("sessionData", sessionDataDir);
+} else if (isDevelopment) {
+  const sessionDataDir = path.join(app.getPath("temp"), "kaoyan-math-bank-electron-session");
+  mkdirSync(sessionDataDir, { recursive: true });
+  app.setPath("sessionData", sessionDataDir);
+}
+
+if (isUnpackagedRuntime && process.platform === "darwin") {
+  app.commandLine.appendSwitch("use-mock-keychain");
+}
 
 let mainWindow: BrowserWindow | null = null;
 let apiServer: Server | null = null;
+let apiServerUrl: string | null = null;
+let allowWindowClose = false;
+let closeCheckPending = false;
+let closeCheckTimer: NodeJS.Timeout | null = null;
+let quitRequested = false;
+let allowAppQuit = false;
 
 async function createWindow() {
   process.env.KMB_DESKTOP = "1";
   process.env.KMB_APP_DATA_DIR = app.getPath("userData");
   process.env.KMB_ROOT_DIR = app.getAppPath();
 
-  const isDev = Boolean(process.env.KMB_DEV_SERVER_URL);
-  const { startApiServer } = await import("../server/index.js");
-  const api = await startApiServer({ port: isDev ? 5174 : 0 });
-  apiServer = api.server;
+  if (!apiServer || !apiServerUrl) {
+    const { startApiServer } = await import("../server/index.js");
+    const api = await startApiServer({ port: isDevelopment ? 5174 : 0 });
+    apiServer = api.server;
+    apiServerUrl = api.url;
+  }
 
   mainWindow = new BrowserWindow({
     width: 1320,
@@ -26,14 +55,40 @@ async function createWindow() {
     title: "Kaoyan Math Bank",
     backgroundColor: "#f7f5ef",
     webPreferences: {
-      preload: path.join(currentDir, "preload.js"),
+      preload: path.join(currentDir, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
     }
   });
 
-  await mainWindow.loadURL(process.env.KMB_DEV_SERVER_URL || api.url);
+  const appUrl = process.env.KMB_DEV_SERVER_URL || apiServerUrl;
+  const trustedOrigin = new URL(appUrl).origin;
+  mainWindow.webContents.on("will-navigate", (event, targetUrl) => {
+    if (!hasOrigin(targetUrl, trustedOrigin)) event.preventDefault();
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isTrustedExternalUrl(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  mainWindow.on("close", (event) => {
+    if (allowWindowClose) return;
+    event.preventDefault();
+    requestRendererCloseCheck();
+  });
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+    allowWindowClose = false;
+    closeCheckPending = false;
+    if (closeCheckTimer) clearTimeout(closeCheckTimer);
+    closeCheckTimer = null;
+    if (quitRequested) {
+      allowAppQuit = true;
+      app.quit();
+    }
+  });
+
+  await mainWindow.loadURL(appUrl);
 }
 
 app.whenReady().then(async () => {
@@ -53,12 +108,21 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (!allowAppQuit && mainWindow && !mainWindow.isDestroyed()) {
+    event.preventDefault();
+    quitRequested = true;
+    mainWindow.close();
+    return;
+  }
   apiServer?.close();
+  apiServer = null;
+  apiServerUrl = null;
 });
 
 function registerIpcHandlers() {
-  ipcMain.handle("workspace:select-directory", async (_event, title?: string) => {
+  ipcMain.handle("workspace:select-directory", async (event, title?: string) => {
+    assertTrustedSender(event);
     const options: Electron.OpenDialogOptions = {
       title: title || "选择题库工作区",
       properties: ["openDirectory", "createDirectory"]
@@ -69,15 +133,34 @@ function registerIpcHandlers() {
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
 
-  ipcMain.handle("shell:open-path", async (_event, targetPath: string) => {
+  ipcMain.handle("shell:open-path", async (event, targetPath: string) => {
+    assertTrustedSender(event);
     await assertKnownWorkspacePath(targetPath);
     return shell.openPath(targetPath);
   });
 
-  ipcMain.handle("shell:trash-path", async (_event, targetPath: string) => {
+  ipcMain.handle("shell:trash-path", async (event, targetPath: string) => {
+    assertTrustedSender(event);
     await assertKnownWorkspacePath(targetPath);
     await shell.trashItem(targetPath);
     return true;
+  });
+
+  ipcMain.handle("shell:open-external", async (event, targetUrl: string) => {
+    assertTrustedSender(event);
+    if (!isTrustedExternalUrl(targetUrl)) throw new Error("只允许打开本机链接或 HTTPS 链接。");
+    await shell.openExternal(targetUrl);
+    return true;
+  });
+
+  ipcMain.on("app:close-response", (event, result: { ok: boolean; error?: string }) => {
+    try {
+      assertTrustedSender(event);
+    } catch {
+      return;
+    }
+    if (!isCloseResponse(result)) return;
+    void handleRendererCloseResponse(result);
   });
 }
 
@@ -88,5 +171,100 @@ async function assertKnownWorkspacePath(targetPath: string) {
   const { isKnownWorkspacePath } = await import("../server/storage.js");
   if (!(await isKnownWorkspacePath(targetPath))) {
     throw new Error("只能操作当前或最近使用过的工作区。");
+  }
+}
+
+function assertTrustedSender(event: IpcMainInvokeEvent | IpcMainEvent) {
+  if (!mainWindow || event.sender.id !== mainWindow.webContents.id) {
+    throw new Error("拒绝未知窗口的 IPC 请求。");
+  }
+  const senderUrl = event.senderFrame?.url;
+  const currentUrl = mainWindow.webContents.getURL();
+  if (!senderUrl || !currentUrl || !hasOrigin(senderUrl, new URL(currentUrl).origin)) {
+    throw new Error("拒绝非本机页面的 IPC 请求。");
+  }
+}
+
+function hasOrigin(value: string, expectedOrigin: string): boolean {
+  try {
+    return new URL(value).origin === expectedOrigin;
+  } catch {
+    return false;
+  }
+}
+
+function isTrustedExternalUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:") return true;
+    const localAppUrl = process.env.KMB_DEV_SERVER_URL || apiServerUrl;
+    return Boolean(localAppUrl && hasOrigin(value, new URL(localAppUrl).origin));
+  } catch {
+    return false;
+  }
+}
+
+function isCloseResponse(value: unknown): value is { ok: boolean; error?: string } {
+  if (typeof value !== "object" || value === null || !("ok" in value)) return false;
+  if (typeof value.ok !== "boolean") return false;
+  return !("error" in value) || value.error === undefined || typeof value.error === "string";
+}
+
+function requestRendererCloseCheck() {
+  if (!mainWindow || closeCheckPending) return;
+  closeCheckPending = true;
+  mainWindow.webContents.send("app:before-close");
+  closeCheckTimer = setTimeout(async () => {
+    if (!mainWindow || !closeCheckPending) return;
+    const choice = await dialog.showMessageBox(mainWindow, {
+      type: "warning",
+      title: "保存检查超时",
+      message: "应用未能确认最后的修改已经保存。",
+      buttons: ["返回继续编辑", "放弃未保存修改"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    });
+    closeCheckPending = false;
+    closeCheckTimer = null;
+    if (choice.response === 1 && mainWindow) {
+      allowWindowClose = true;
+      mainWindow.close();
+    } else {
+      quitRequested = false;
+    }
+  }, 10_000);
+}
+
+function finishCloseCheckTimer() {
+  if (closeCheckTimer) clearTimeout(closeCheckTimer);
+  closeCheckTimer = null;
+}
+
+async function handleRendererCloseResponse(result: { ok: boolean; error?: string }) {
+  if (!closeCheckPending || !mainWindow) return;
+  finishCloseCheckTimer();
+  if (result.ok) {
+    allowWindowClose = true;
+    mainWindow.close();
+    return;
+  }
+
+  const choice = await dialog.showMessageBox(mainWindow, {
+    type: "warning",
+    title: "尚未保存",
+    message: "最后的修改未能保存。",
+    detail: result.error || "请返回应用重试保存，或放弃未保存的修改。",
+    buttons: ["返回继续编辑", "放弃未保存修改"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+  closeCheckPending = false;
+  if (choice.response === 1 && mainWindow) {
+    allowWindowClose = true;
+    mainWindow.close();
+  } else {
+    quitRequested = false;
   }
 }
