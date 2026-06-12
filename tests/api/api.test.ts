@@ -13,6 +13,11 @@ beforeEach(async () => {
 });
 
 describe("API validation", () => {
+  it("allows the MathJax worker required for repeated preview typesetting", async () => {
+    const response = await request(createApiApp()).get("/api/app").expect(200);
+    expect(response.headers["content-security-policy"]).toContain("worker-src 'self' blob:");
+  });
+
   it("rejects foreign mutating origins", async () => {
     const app = createApiApp();
     const response = await request(app)
