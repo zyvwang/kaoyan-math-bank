@@ -1,6 +1,7 @@
 import { _electron as electron, expect, test } from "@playwright/test";
-import { readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { createSampleBank } from "../../server/bank-schema.js";
 import type { Bank } from "../../shared/types.js";
 
 test("persists an edited item in the packaged desktop runtime", async () => {
@@ -74,5 +75,46 @@ test("persists an edited item in the packaged desktop runtime", async () => {
     await expect(restartedPage.getByLabel("原编号")).toHaveValue("desktop-close-save");
   } finally {
     await restartedApp.evaluate(({ app }) => app.exit(0)).catch(() => undefined);
+  }
+});
+
+test("keeps MathJax previews working after switching questions", async () => {
+  const workspacePath = path.resolve(".tmp/playwright-preview-workspace");
+  const appDataPath = path.resolve(".tmp/playwright-preview-app-data");
+  await rm(workspacePath, { recursive: true, force: true });
+  await rm(appDataPath, { recursive: true, force: true });
+  await mkdir(workspacePath, { recursive: true });
+  await writeFile(
+    path.join(workspacePath, "bank.json"),
+    `${JSON.stringify(createSampleBank(), null, 2)}\n`,
+    "utf8"
+  );
+
+  const electronApp = await electron.launch({
+    args: ["."],
+    env: {
+      ...process.env,
+      KMB_WORKSPACE_DIR: workspacePath,
+      KMB_APP_DATA_DIR: appDataPath
+    }
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    await expect(page.getByLabel("原编号")).toHaveValue("自造示例 1");
+    await expect
+      .poll(() => page.locator(".previewPane").nth(0).locator("mjx-container").count())
+      .toBeGreaterThan(0);
+
+    await page.getByText("自造示例 2", { exact: true }).click();
+    await expect(page.getByLabel("原编号")).toHaveValue("自造示例 2");
+    await expect
+      .poll(() => page.locator(".previewPane").nth(0).locator("mjx-container").count())
+      .toBeGreaterThan(0);
+    await expect
+      .poll(() => page.locator(".previewPane").nth(1).locator("mjx-container").count())
+      .toBeGreaterThan(0);
+  } finally {
+    await electronApp.evaluate(({ app }) => app.exit(0)).catch(() => undefined);
   }
 });

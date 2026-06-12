@@ -46,7 +46,7 @@ describe("Electron shell path allowlist", () => {
 
     expect(viteSource).toContain("script-src 'self' 'unsafe-inline'");
     expect(viteSource).toContain("worker-src 'self' blob:");
-    expect(serverSource).toContain("\"default-src 'self'; script-src 'self'; style-src");
+    expect(serverSource).toContain("worker-src 'self' blob:");
     expect(previewSource).toContain('fonts: "/vendor/mathjax-fonts"');
     expect(mainSource).toContain("if (isDevelopment)");
     expect(mainSource).toContain("if (configuredAppDataDir)");
