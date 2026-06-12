@@ -33,7 +33,7 @@
     "test:desktop": "playwright test --config playwright.config.ts",
     "verify": "npm run lint && npm run test && npm run build && npm run test:coverage && cross-env KMB_WORKSPACE_DIR=.tmp/verify-workspace tsx scripts/verify-export.ts",
     "dist": "npm run build && electron-builder --publish never",
-    "dist:mac": "npm run build && electron-builder --mac dmg --publish never",
+    "dist:mac": "npm run build && electron-builder --mac dmg --publish never && node scripts/cleanup-macos-unpacked.mjs",
     "dist:win": "npm run build && electron-builder --win nsis --publish never"
   },
   "dependencies": {
@@ -84,6 +84,9 @@
   "build": {
     "appId": "com.kaoyanmathbank.app",
     "productName": "Kaoyan Math Bank",
+    "extraMetadata": {
+      "kmbUseMockKeychain": true
+    },
     "directories": {
       "output": "release"
     },

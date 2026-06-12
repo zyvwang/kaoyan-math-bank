@@ -35,4 +35,8 @@ Use this checklist before producing a public macOS DMG or Windows NSIS installer
 
 ## Known Signing Limit
 
-The project still does not perform Apple notarization or Windows code signing. Public release notes should mention that early builds may show operating-system security warnings.
+The project still does not perform Apple notarization or Windows code signing. Until a valid
+Developer ID is configured, packaged macOS builds set `kmbUseMockKeychain` to avoid repeated login
+keychain prompts. Remove that build metadata flag when signing is enabled, then verify the packaged
+app uses the system keychain without prompting repeatedly. Public release notes should mention that
+unsigned early builds may still show operating-system launch warnings.

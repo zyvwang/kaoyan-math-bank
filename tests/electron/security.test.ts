@@ -36,6 +36,10 @@ describe("Electron shell path allowlist", () => {
 
   it("keeps development boot compatible without weakening packaged storage", async () => {
     const mainSource = await readFile(path.resolve("electron/main.ts"), "utf8");
+    const packageMetadata = JSON.parse(await readFile(path.resolve("package.json"), "utf8")) as {
+      build?: { extraMetadata?: { kmbUseMockKeychain?: boolean } };
+      scripts?: { "dist:mac"?: string };
+    };
     const viteSource = await readFile(path.resolve("vite.config.ts"), "utf8");
     const serverSource = await readFile(path.resolve("server/index.ts"), "utf8");
     const previewSource = await readFile(path.resolve("src/utils/preview.ts"), "utf8");
@@ -46,8 +50,11 @@ describe("Electron shell path allowlist", () => {
     expect(previewSource).toContain('fonts: "/vendor/mathjax-fonts"');
     expect(mainSource).toContain("if (isDevelopment)");
     expect(mainSource).toContain("if (configuredAppDataDir)");
-    expect(mainSource).toContain("if (isUnpackagedRuntime");
+    expect(mainSource).toContain("function shouldUseMockKeychain()");
+    expect(mainSource).toContain("packageMetadata.kmbUseMockKeychain === true");
     expect(mainSource).toContain('app.setPath("sessionData"');
     expect(mainSource).toContain('app.commandLine.appendSwitch("use-mock-keychain")');
+    expect(packageMetadata.build?.extraMetadata?.kmbUseMockKeychain).toBe(true);
+    expect(packageMetadata.scripts?.["dist:mac"]).toContain("cleanup-macos-unpacked.mjs");
   });
 });

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const isDevelopment = Boolean(process.env.KMB_DEV_SERVER_URL);
 const configuredAppDataDir = process.env.KMB_APP_DATA_DIR?.trim();
-const isUnpackagedRuntime = !app.isPackaged;
+const useMockKeychain = shouldUseMockKeychain();
 
 if (configuredAppDataDir) {
   const appDataDir = path.resolve(configuredAppDataDir);
@@ -22,7 +22,7 @@ if (configuredAppDataDir) {
   app.setPath("sessionData", sessionDataDir);
 }
 
-if (isUnpackagedRuntime && process.platform === "darwin") {
+if (useMockKeychain) {
   app.commandLine.appendSwitch("use-mock-keychain");
 }
 
@@ -199,6 +199,20 @@ function isTrustedExternalUrl(value: string): boolean {
     if (url.protocol === "https:") return true;
     const localAppUrl = process.env.KMB_DEV_SERVER_URL || apiServerUrl;
     return Boolean(localAppUrl && hasOrigin(value, new URL(localAppUrl).origin));
+  } catch {
+    return false;
+  }
+}
+
+function shouldUseMockKeychain(): boolean {
+  if (process.platform !== "darwin") return false;
+  if (!app.isPackaged) return true;
+
+  try {
+    const packageMetadata = JSON.parse(
+      readFileSync(path.join(app.getAppPath(), "package.json"), "utf8")
+    ) as { kmbUseMockKeychain?: unknown };
+    return packageMetadata.kmbUseMockKeychain === true;
   } catch {
     return false;
   }
