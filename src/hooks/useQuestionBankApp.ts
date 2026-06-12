@@ -5,7 +5,12 @@ import type {
   PointerEvent as ReactPointerEvent,
   RefObject
 } from "react";
-import { fetchAppInfo, fetchBank } from "../api/client.js";
+import {
+  fetchAppInfo,
+  fetchBank,
+  fetchRecoveryCandidates,
+  recoverBank
+} from "../api/client.js";
 import type { DropPosition } from "../itemOrder.js";
 import type {
   AppInfo,
@@ -15,6 +20,7 @@ import type {
   ModuleKind,
   QuestionItem
 } from "../../shared/types.js";
+import type { RecoveryCandidate } from "../../shared/types.js";
 import type { AddMenu, AddMode, Notice, ReorderMenu, SaveState } from "./controllerTypes.js";
 import { useAutosave } from "./useAutosave.js";
 import { useCompileExportActions } from "./useCompileExportActions.js";
@@ -42,6 +48,8 @@ export interface QuestionBankController {
   search: string;
   saveState: SaveState;
   notice: Notice | null;
+  loadError: string | null;
+  recoveryCandidates: RecoveryCandidate[];
   exportName: string;
   exportOrderMode: ExportOrderMode;
   randomSeed: string;
@@ -55,6 +63,7 @@ export interface QuestionBankController {
   reorderDialogItem: QuestionItem | null;
   reorderTarget: string;
   reorderError: string;
+  canUndoDelete: boolean;
   isChangingWorkspace: boolean;
   texPathDraft: string;
   reorderInputRef: RefObject<HTMLInputElement | null>;
@@ -70,11 +79,16 @@ export interface QuestionBankController {
   setReorderTarget: (value: string) => void;
   setReorderError: (value: string) => void;
   setNotice: (value: Notice | null) => void;
+  retrySave: () => Promise<void>;
+  retryInitialLoad: () => Promise<void>;
+  recoverFromCandidate: (candidateId: string) => Promise<void>;
+  flushPendingChanges: () => Promise<void>;
   updateBank: (updater: (current: Bank) => Bank) => void;
   updateItem: (id: string, patch: Partial<QuestionItem>) => void;
   addItem: (mode?: AddMode) => void;
   deleteItem: (id: string) => void;
   deleteActiveItem: () => void;
+  undoDelete: () => void;
   moveActive: (direction: -1 | 1) => void;
   openReorderDialog: (id: string) => void;
   closeReorderDialog: () => void;
@@ -89,6 +103,7 @@ export interface QuestionBankController {
   createNewWorkspace: () => Promise<void>;
   openWorkspace: () => Promise<void>;
   switchToWorkspace: (workspacePath: string) => Promise<void>;
+  relocateWorkspace: (workspacePath: string) => Promise<void>;
   moveWorkspaceInList: (workspacePath: string, direction: "up" | "down") => Promise<void>;
   deleteWorkspace: (workspacePath: string) => Promise<void>;
   saveTexPathOverride: () => Promise<void>;
@@ -103,6 +118,8 @@ export function useQuestionBankApp(): QuestionBankController {
   const [bank, setBank] = useState<Bank | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [recoveryCandidates, setRecoveryCandidates] = useState<RecoveryCandidate[]>([]);
   const selection = useSelectionFilters();
   const derived = useQuestionDerivedData(bank, activeId, {
     chapterFilter: selection.chapterFilter,
@@ -111,7 +128,7 @@ export function useQuestionBankApp(): QuestionBankController {
     search: selection.search
   });
   const autosave = useAutosave(bank, setNotice);
-  const { persistBank, saveState, skipNextAutosave } = autosave;
+  const { persistBank, resetAutosave, retrySave, saveState } = autosave;
 
   const updateBank = useCallback((updater: (current: Bank) => Bank) => {
     setBank((current) => (current ? updater(current) : current));
@@ -142,16 +159,18 @@ export function useQuestionBankApp(): QuestionBankController {
 
   const reloadWorkspace = useCallback(
     async (nextAppInfo: AppInfo) => {
-      const nextBank = await fetchBank();
-      skipNextAutosave();
+      const snapshot = await fetchBank();
+      resetAutosave(snapshot);
       setAppInfo(nextAppInfo);
-      setBank(nextBank);
-      setActiveId(nextBank.items[0]?.id ?? null);
-      selectAllItems(nextBank.items);
+      setBank(snapshot.bank);
+      setActiveId(snapshot.bank.items[0]?.id ?? null);
+      selectAllItems(snapshot.bank.items);
       clearFilters();
       setCompileResult(null);
+      setLoadError(null);
+      setRecoveryCandidates([]);
     },
-    [clearFilters, selectAllItems, setCompileResult, skipNextAutosave]
+    [clearFilters, resetAutosave, selectAllItems, setCompileResult]
   );
 
   const workspace = useWorkspaceActions({
@@ -171,24 +190,54 @@ export function useQuestionBankApp(): QuestionBankController {
     setNotice,
     setSelectedIds: selection.setSelectedIds,
     updateBank,
-    clearFilters
+    clearFilters,
+    workspacePath: appInfo?.currentWorkspacePath ?? ""
   });
 
   const loadAppAndBank = useCallback(async () => {
-    const [nextAppInfo, nextBank] = await Promise.all([fetchAppInfo(), fetchBank()]);
-    skipNextAutosave();
+    setLoadError(null);
+    const nextAppInfo = await fetchAppInfo();
     setAppInfo(nextAppInfo);
-    setBank(nextBank);
-    setActiveId(nextBank.items[0]?.id ?? null);
-    selectAllItems(nextBank.items);
+    const snapshot = await fetchBank();
+    resetAutosave(snapshot);
+    setAppInfo(nextAppInfo);
+    setBank(snapshot.bank);
+    setActiveId(snapshot.bank.items[0]?.id ?? null);
+    selectAllItems(snapshot.bank.items);
     setCompileResult(null);
-  }, [selectAllItems, setCompileResult, skipNextAutosave]);
+    setRecoveryCandidates([]);
+  }, [resetAutosave, selectAllItems, setCompileResult]);
 
   useEffect(() => {
     loadAppAndBank().catch((error) => {
-      setNotice({ type: "error", text: error instanceof Error ? error.message : "读取题库失败。" });
+      const message = error instanceof Error ? error.message : "读取题库失败。";
+      setLoadError(message);
+      setNotice({ type: "error", text: message });
+      fetchRecoveryCandidates()
+        .then(setRecoveryCandidates)
+        .catch(() => setRecoveryCandidates([]));
     });
   }, [loadAppAndBank]);
+
+  const recoverFromCandidate = useCallback(
+    async (candidateId: string) => {
+      const snapshot = await recoverBank(candidateId);
+      resetAutosave(snapshot);
+      setBank(snapshot.bank);
+      setActiveId(snapshot.bank.items[0]?.id ?? null);
+      selectAllItems(snapshot.bank.items);
+      setLoadError(null);
+      setRecoveryCandidates([]);
+      setNotice({ type: "ok", text: "题库已从备份恢复。" });
+    },
+    [resetAutosave, selectAllItems]
+  );
+
+  const flushPendingChanges = useCallback(async () => {
+    if (bank && appInfo?.currentWorkspacePath) {
+      await persistBank(bank);
+    }
+  }, [appInfo?.currentWorkspacePath, bank, persistBank]);
 
   return {
     appInfo,
@@ -207,6 +256,8 @@ export function useQuestionBankApp(): QuestionBankController {
     search: selection.search,
     saveState,
     notice,
+    loadError,
+    recoveryCandidates,
     exportName: compileExport.exportName,
     exportOrderMode: compileExport.exportOrderMode,
     randomSeed: compileExport.randomSeed,
@@ -220,6 +271,7 @@ export function useQuestionBankApp(): QuestionBankController {
     reorderDialogItem: reorder.reorderDialogItem,
     reorderTarget: reorder.reorderTarget,
     reorderError: reorder.reorderError,
+    canUndoDelete: reorder.canUndoDelete,
     isChangingWorkspace: workspace.isChangingWorkspace,
     texPathDraft: workspace.texPathDraft,
     reorderInputRef: reorder.reorderInputRef,
@@ -235,11 +287,16 @@ export function useQuestionBankApp(): QuestionBankController {
     setReorderTarget: reorder.setReorderTarget,
     setReorderError: reorder.setReorderError,
     setNotice,
+    retrySave,
+    retryInitialLoad: loadAppAndBank,
+    recoverFromCandidate,
+    flushPendingChanges,
     updateBank,
     updateItem,
     addItem: reorder.addItem,
     deleteItem: reorder.deleteItem,
     deleteActiveItem: reorder.deleteActiveItem,
+    undoDelete: reorder.undoDelete,
     moveActive: reorder.moveActive,
     openReorderDialog: reorder.openReorderDialog,
     closeReorderDialog: reorder.closeReorderDialog,
@@ -254,6 +311,7 @@ export function useQuestionBankApp(): QuestionBankController {
     createNewWorkspace: workspace.createNewWorkspace,
     openWorkspace: workspace.openWorkspace,
     switchToWorkspace: workspace.switchToWorkspace,
+    relocateWorkspace: workspace.relocateWorkspace,
     moveWorkspaceInList: workspace.moveWorkspaceInList,
     deleteWorkspace: workspace.deleteWorkspace,
     saveTexPathOverride: workspace.saveTexPathOverride,

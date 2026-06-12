@@ -1,7 +1,8 @@
 import { constants } from "node:fs";
 import { access, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { getDefaultWorkspaceRoot, normalizeBank } from "../server/storage.js";
+import { getDefaultWorkspaceRoot } from "../server/storage.js";
+import { validateBankPayload } from "../shared/validation.js";
 
 const [legacyProjectPathArg, targetWorkspacePathArg] = process.argv.slice(2);
 
@@ -24,7 +25,11 @@ await mkdir(targetAssetsPath, { recursive: true });
 await mkdir(path.join(targetWorkspacePath, "exports"), { recursive: true });
 await mkdir(path.join(targetWorkspacePath, ".tmp"), { recursive: true });
 
-const bankJson = normalizeBank(JSON.parse(await readFile(sourceBankPath, "utf8")));
+const validation = validateBankPayload(JSON.parse(await readFile(sourceBankPath, "utf8")));
+if (!validation.ok || !validation.value) {
+  throw new Error(validation.error ?? "旧题库数据无效。");
+}
+const bankJson = validation.value;
 await writeFile(path.join(targetWorkspacePath, "bank.json"), `${JSON.stringify(bankJson, null, 2)}\n`, "utf8");
 
 try {

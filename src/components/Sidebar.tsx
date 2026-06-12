@@ -72,7 +72,7 @@ function WorkspacePanel({ app }: { app: QuestionBankController }) {
         <button
           className="workspaceActionButton"
           onClick={app.openCurrentWorkspaceFolder}
-        disabled={!appInfo.currentWorkspacePath}
+          disabled={!appInfo.currentWorkspacePath}
           title="在 Finder 或文件管理器中显示当前工作区"
         >
           <ExternalLink size={16} />
@@ -95,13 +95,28 @@ function WorkspacePanel({ app }: { app: QuestionBankController }) {
               className="workspaceListMain"
               type="button"
               onClick={() => void app.switchToWorkspace(workspace.path)}
-              disabled={app.isChangingWorkspace || workspace.path === appInfo.currentWorkspacePath}
+              disabled={
+                app.isChangingWorkspace ||
+                !workspace.exists ||
+                workspace.path === appInfo.currentWorkspacePath
+              }
               title={workspace.path}
             >
               <strong>{workspace.name}</strong>
               <small>{workspace.exists ? "本地工作区" : "路径缺失"}</small>
             </button>
             <div className="workspaceListControls">
+              {!workspace.exists && (
+                <button
+                  className="miniIconButton"
+                  type="button"
+                  onClick={() => void app.relocateWorkspace(workspace.path)}
+                  disabled={app.isChangingWorkspace}
+                  title="重新定位工作区"
+                >
+                  <FolderInput size={14} />
+                </button>
+              )}
               <button
                 className="miniIconButton"
                 type="button"

@@ -2,12 +2,15 @@ import type {
   AppInfo,
   AssetUploadResponse,
   Bank,
+  BankSnapshot,
   CompileResponse,
   ExportOrderMode,
   ExportResponse,
   ModuleKind,
   QuestionAsset,
-  QuestionItem
+  QuestionItem,
+  RecoveryCandidate,
+  SaveBankRequest
 } from "../../shared/types.js";
 import { appendTex } from "../utils/form.js";
 
@@ -15,17 +18,26 @@ export async function fetchAppInfo(): Promise<AppInfo> {
   return fetchJson<AppInfo>("/api/app");
 }
 
-export async function fetchBank(): Promise<Bank> {
-  return fetchJson<Bank>("/api/bank");
+export async function fetchBank(): Promise<BankSnapshot> {
+  return fetchJson<BankSnapshot>("/api/bank");
 }
 
-export async function saveBank(bank: Bank): Promise<Bank> {
+export async function saveBank(request: SaveBankRequest): Promise<BankSnapshot> {
   const response = await fetch("/api/bank", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(bank)
+    body: JSON.stringify(request)
   });
-  return readJsonResponse<Bank>(response);
+  return readJsonResponse<BankSnapshot>(response);
+}
+
+export async function fetchRecoveryCandidates(): Promise<RecoveryCandidate[]> {
+  const data = await fetchJson<{ candidates: RecoveryCandidate[] }>("/api/recovery");
+  return data.candidates;
+}
+
+export async function recoverBank(candidateId: string): Promise<BankSnapshot> {
+  return postJson<BankSnapshot>("/api/recovery", { candidateId });
 }
 
 export async function createSampleWorkspace(workspacePath: string): Promise<AppInfo> {
@@ -120,9 +132,19 @@ async function readJsonResponse<T>(
   response: Response,
   options: { allowErrorPayload?: boolean } = {}
 ): Promise<T> {
-  const data = (await response.json()) as T & { error?: string };
+  const data = (await response.json()) as T & { error?: string; code?: string };
   if (!response.ok && !options.allowErrorPayload) {
-    throw new Error(data.error ?? "请求失败。");
+    throw new ApiRequestError(data.error ?? "请求失败。", response.status, data.code);
   }
   return data;
+}
+
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: string
+  ) {
+    super(message);
+  }
 }

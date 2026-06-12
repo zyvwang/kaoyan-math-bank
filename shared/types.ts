@@ -44,6 +44,18 @@ export interface Bank {
   items: QuestionItem[];
 }
 
+export interface BankSnapshot {
+  workspacePath: string;
+  revision: string;
+  bank: Bank;
+}
+
+export interface SaveBankRequest {
+  workspacePath: string;
+  baseRevision: string;
+  bank: Bank;
+}
+
 export interface AppState {
   version: 1;
   currentWorkspacePath?: string;
@@ -99,6 +111,17 @@ export interface ExportResponse {
   };
 }
 
+export interface RecoveryCandidate {
+  id: string;
+  label: string;
+  createdAt: string;
+  source: "backup" | "history";
+}
+
+export interface RecoverBankRequest {
+  candidateId: string;
+}
+
 export interface AssetUploadResponse {
   asset: QuestionAsset;
   url: string;
@@ -131,6 +154,7 @@ export interface ExportRequest {
 
 export interface ApiErrorResponse {
   error: string;
+  code: string;
 }
 
 export type TexField = ModuleKind;

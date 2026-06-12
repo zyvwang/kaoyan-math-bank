@@ -6,6 +6,10 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
+    headers: {
+      "Content-Security-Policy":
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    },
     proxy: {
       "/api": "http://127.0.0.1:5174",
       "/assets": "http://127.0.0.1:5174",

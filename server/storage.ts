@@ -1,22 +1,52 @@
 import { constants } from "node:fs";
-import { access, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type {
   AppState,
   Bank,
-  LatexSettings,
-  ModuleKind,
-  QuestionAsset,
-  QuestionItem,
-  StarRating,
+  BankSnapshot,
+  RecoveryCandidate,
+  SaveBankRequest,
   WorkspaceSummary
 } from "../shared/types.js";
+import { validateBankPayload } from "../shared/validation.js";
+import {
+  appDataDir,
+  appStatePath,
+  normalizeRecent,
+  readPersistedAppState,
+  rootDir,
+  updateAppState,
+  updateTexPathOverride,
+  writeAppState
+} from "./app-state.js";
+import { writeJsonFileAtomic } from "./json-file.js";
+import {
+  createEmptyBank,
+  createSampleBank,
+  defaultSettings,
+  defaultStarRating,
+  moduleKinds,
+  normalizeBank
+} from "./bank-schema.js";
 
-export const rootDir = path.resolve(process.env.KMB_ROOT_DIR ?? process.cwd());
-export const appDataDir = path.resolve(process.env.KMB_APP_DATA_DIR ?? path.join(rootDir, ".app-data"));
-export const appStatePath = path.join(appDataDir, "app-state.json");
-export const defaultStarRating: StarRating = 5;
+export {
+  appDataDir,
+  appStatePath,
+  rootDir,
+  updateAppState,
+  updateTexPathOverride,
+  writeAppState,
+  writeJsonFileAtomic,
+  createEmptyBank,
+  createSampleBank,
+  defaultSettings,
+  defaultStarRating,
+  moduleKinds,
+  normalizeBank
+};
 
 const forcedWorkspacePath = process.env.KMB_WORKSPACE_DIR
   ? path.resolve(process.env.KMB_WORKSPACE_DIR)
@@ -28,23 +58,31 @@ export interface WorkspaceDirs {
   assetDir: string;
   exportDir: string;
   tempDir: string;
+  historyDir: string;
 }
 
-export const defaultSettings: LatexSettings = {
-  pageSize: "a4",
-  spacing: {
-    item: "1.0em",
-    module: "0.45em"
-  },
-  preamble: `% 可在这里添加全局宏命令，例如：
-% \\newcommand{\\R}{\\mathbb{R}}`
-};
+export class StorageError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly status = 400
+  ) {
+    super(message);
+  }
+}
 
-export const moduleKinds: ModuleKind[] = ["question", "solution", "note"];
+const workspaceWriteQueues = new Map<string, Promise<unknown>>();
+const historyCreatedForWorkspace = new Set<string>();
 
 export async function ensureProjectDirs() {
   await mkdir(appDataDir, { recursive: true });
-  await readAppState();
+  if (!forcedWorkspacePath && !(await fileExists(appStatePath))) {
+    await writeAppState({ version: 1, recentWorkspacePaths: [] });
+  }
+  const state = await readAppState();
+  if (state.currentWorkspacePath && (await workspaceExists(state.currentWorkspacePath))) {
+    await cleanupOldTempDirs(state.currentWorkspacePath);
+  }
 }
 
 export async function readAppState(): Promise<AppState> {
@@ -60,50 +98,7 @@ export async function readAppState(): Promise<AppState> {
     };
   }
 
-  try {
-    const raw = await readFile(appStatePath, "utf8");
-    const state = normalizeAppState(JSON.parse(raw));
-    const normalized = normalizeAppState(state);
-    await writeAppState(normalized);
-    return normalized;
-  } catch (error) {
-    if (!isNotFound(error)) throw error;
-    const state = normalizeAppState({
-      version: 1,
-      recentWorkspacePaths: []
-    });
-    await writeAppState(state);
-    return state;
-  }
-}
-
-export async function writeAppState(state: AppState): Promise<AppState> {
-  await mkdir(appDataDir, { recursive: true });
-  const normalized = normalizeAppState(state);
-  await writeJsonFileAtomic(appStatePath, normalized);
-  return normalized;
-}
-
-export async function updateTexPathOverride(texPathOverride: string | undefined): Promise<AppState> {
-  const state = await readAppState();
-  return writeAppState({
-    ...state,
-    texPathOverride: texPathOverride?.trim() || undefined
-  });
-}
-
-export async function createWorkspace(name: string): Promise<AppState> {
-  const root = getDefaultWorkspaceRoot();
-  await mkdir(root, { recursive: true });
-  const baseName = sanitizeWorkspaceName(name) || "New Bank";
-  let workspacePath = path.join(root, baseName);
-  let suffix = 2;
-  while (await fileExists(workspacePath)) {
-    workspacePath = path.join(root, `${baseName} ${suffix}`);
-    suffix += 1;
-  }
-  await ensureWorkspace(workspacePath, { sample: false });
-  return switchWorkspace(workspacePath);
+  return readPersistedAppState();
 }
 
 export async function createEmptyWorkspace(workspacePath: string): Promise<AppState> {
@@ -134,44 +129,58 @@ export async function openExistingWorkspace(workspacePath: string): Promise<AppS
 
 export async function switchWorkspace(workspacePath: string): Promise<AppState> {
   const resolvedPath = path.resolve(workspacePath);
-  await ensureWorkspace(resolvedPath, { sample: false });
-  const state = await readAppState();
-  return writeAppState({
+  if (!(await workspaceExists(resolvedPath))) {
+    throw new StorageError(
+      "这个文件夹不是题库工作区：缺少 bank.json。请使用“新建”创建空工作区。",
+      "WORKSPACE_MISSING"
+    );
+  }
+  return updateAppState((state) => ({
     ...state,
     currentWorkspacePath: resolvedPath,
     recentWorkspacePaths: normalizeRecent([resolvedPath, ...state.recentWorkspacePaths])
-  });
+  }));
 }
 
 export async function removeWorkspace(workspacePath: string): Promise<AppState> {
   const resolvedPath = path.resolve(workspacePath);
-  const state = await readAppState();
-  const recentWorkspacePaths = state.recentWorkspacePaths.filter((item) => item !== resolvedPath);
-  const currentWorkspacePath =
-    state.currentWorkspacePath === resolvedPath ? recentWorkspacePaths[0] : state.currentWorkspacePath;
-  return writeAppState({
-    ...state,
-    currentWorkspacePath,
-    recentWorkspacePaths
+  return updateAppState(async (state) => {
+    const recentWorkspacePaths = state.recentWorkspacePaths.filter((item) => item !== resolvedPath);
+    let currentWorkspacePath = state.currentWorkspacePath;
+    if (state.currentWorkspacePath === resolvedPath) {
+      const existence = await Promise.all(
+        recentWorkspacePaths.map(async (candidate) => ({
+          candidate,
+          exists: await workspaceExists(candidate)
+        }))
+      );
+      currentWorkspacePath = existence.find((entry) => entry.exists)?.candidate;
+    }
+    return {
+      ...state,
+      currentWorkspacePath,
+      recentWorkspacePaths
+    };
   });
 }
 
 export async function moveWorkspace(workspacePath: string, direction: -1 | 1): Promise<AppState> {
   const resolvedPath = path.resolve(workspacePath);
-  const state = await readAppState();
-  const recentWorkspacePaths = [...state.recentWorkspacePaths];
-  const index = recentWorkspacePaths.indexOf(resolvedPath);
-  const targetIndex = index + direction;
-  if (index === -1 || targetIndex < 0 || targetIndex >= recentWorkspacePaths.length) {
-    return state;
-  }
-  [recentWorkspacePaths[index], recentWorkspacePaths[targetIndex]] = [
-    recentWorkspacePaths[targetIndex],
-    recentWorkspacePaths[index]
-  ];
-  return writeAppState({
-    ...state,
-    recentWorkspacePaths
+  return updateAppState((state) => {
+    const recentWorkspacePaths = [...state.recentWorkspacePaths];
+    const index = recentWorkspacePaths.indexOf(resolvedPath);
+    const targetIndex = index + direction;
+    if (index === -1 || targetIndex < 0 || targetIndex >= recentWorkspacePaths.length) {
+      return state;
+    }
+    [recentWorkspacePaths[index], recentWorkspacePaths[targetIndex]] = [
+      recentWorkspacePaths[targetIndex],
+      recentWorkspacePaths[index]
+    ];
+    return {
+      ...state,
+      recentWorkspacePaths
+    };
   });
 }
 
@@ -186,14 +195,6 @@ export async function listRecentWorkspaces(): Promise<WorkspaceSummary[]> {
   );
 }
 
-export async function ensureCurrentWorkspace(): Promise<WorkspaceDirs> {
-  const state = await readAppState();
-  if (!state.currentWorkspacePath) {
-    throw new Error("尚未选择题库工作区。");
-  }
-  return ensureWorkspace(state.currentWorkspacePath, { sample: false });
-}
-
 export function getWorkspaceDirs(workspacePath: string): WorkspaceDirs {
   const workspaceDir = path.resolve(workspacePath);
   return {
@@ -201,7 +202,8 @@ export function getWorkspaceDirs(workspacePath: string): WorkspaceDirs {
     bankPath: path.join(workspaceDir, "bank.json"),
     assetDir: path.join(workspaceDir, "assets"),
     exportDir: path.join(workspaceDir, "exports"),
-    tempDir: path.join(workspaceDir, ".tmp")
+    tempDir: path.join(workspaceDir, ".tmp"),
+    historyDir: path.join(workspaceDir, ".history")
   };
 }
 
@@ -223,6 +225,7 @@ export async function ensureWorkspace(workspacePath: string, options: { sample: 
   ]);
 
   if (!(await fileExists(dirs.bankPath))) {
+    historyCreatedForWorkspace.delete(dirs.workspaceDir);
     const bank = options.sample ? createSampleBank() : createEmptyBank();
     await writeJsonFileAtomic(dirs.bankPath, bank, { backup: false });
   }
@@ -230,108 +233,118 @@ export async function ensureWorkspace(workspacePath: string, options: { sample: 
   return dirs;
 }
 
-export function createEmptyBank(): Bank {
-  return {
-    version: 2,
-    settings: defaultSettings,
-    items: []
-  };
-}
-
-export function createSampleBank(): Bank {
-  const now = "2026-01-01T00:00:00.000Z";
-  const items: QuestionItem[] = [
-    {
-      id: "sample-limit",
-      order: 1,
-      sourceNumber: "自造示例 1",
-      chapter: "高等数学/极限",
-      tags: ["极限", "等价无穷小"],
-      star: 3,
-      modules: {
-        question: { tex: "求极限 $\\displaystyle \\lim_{x\\to 0}\\frac{\\sin x-x}{x^3}$。" },
-        solution: {
-          tex:
-            "由泰勒公式 $\\sin x=x-\\dfrac{x^3}{6}+o(x^3)$，得\n\\[\n\\lim_{x\\to 0}\\frac{\\sin x-x}{x^3}=-\\frac16.\n\\]"
-        },
-        note: { tex: "这是一个用于演示实时公式预览和导出编译的自造例题。" }
-      },
-      assets: [],
-      createdAt: now,
-      updatedAt: now
-    },
-    {
-      id: "sample-linear-algebra",
-      order: 2,
-      sourceNumber: "自造示例 2",
-      chapter: "线性代数/矩阵",
-      tags: ["矩阵", "行列式"],
-      star: 2,
-      modules: {
-        question: {
-          tex: "设 $A=\\begin{pmatrix}1&2\\\\0&3\\end{pmatrix}$，求 $\\det A$ 与 $A$ 的特征值。"
-        },
-        solution: {
-          tex:
-            "因为 $A$ 是上三角矩阵，所以\n\\[\n\\det A=1\\cdot 3=3,\n\\]\n特征值为主对角线元素 $1,3$。"
-        },
-        note: { tex: "上三角矩阵的行列式和特征值都可以直接从主对角线读取。" }
-      },
-      assets: [],
-      createdAt: now,
-      updatedAt: now
-    }
-  ];
-
-  return {
-    version: 2,
-    settings: defaultSettings,
-    items
-  };
-}
-
 export async function readBank(): Promise<Bank> {
+  return (await readBankSnapshot()).bank;
+}
+
+export async function readBankSnapshot(): Promise<BankSnapshot> {
   const state = await readAppState();
   if (!state.currentWorkspacePath) {
-    return createEmptyBank();
+    const bank = createEmptyBank();
+    return { workspacePath: "", revision: revisionForContent(serializeJson(bank)), bank };
   }
   const dirs = getWorkspaceDirs(state.currentWorkspacePath);
   try {
     const raw = await readFile(dirs.bankPath, "utf8");
-    return normalizeBank(JSON.parse(raw));
+    return {
+      workspacePath: dirs.workspaceDir,
+      revision: revisionForContent(raw),
+      bank: parseStoredBank(raw)
+    };
   } catch (error) {
-    if (isNotFound(error)) return createEmptyBank();
+    if (isNotFound(error)) {
+      throw new StorageError("当前工作区缺少 bank.json。", "WORKSPACE_MISSING", 404);
+    }
     throw error;
   }
 }
 
-export async function writeBank(bank: Bank): Promise<Bank> {
-  const state = await readAppState();
-  if (!state.currentWorkspacePath) {
-    throw new Error("尚未选择题库工作区。");
-  }
-  const dirs = await ensureWorkspace(state.currentWorkspacePath, { sample: false });
-  const normalized = normalizeBank(bank);
-  await writeJsonFileAtomic(dirs.bankPath, normalized);
-  return normalized;
+export async function saveBankSnapshot(request: SaveBankRequest): Promise<BankSnapshot> {
+  const workspacePath = path.resolve(request.workspacePath);
+  return withWorkspaceWriteLock(workspacePath, async () => {
+    const state = await readAppState();
+    if (!state.currentWorkspacePath || path.resolve(state.currentWorkspacePath) !== workspacePath) {
+      throw new StorageError("题库保存目标已不是当前工作区，请重试。", "WORKSPACE_CHANGED", 409);
+    }
+    if (!(await workspaceExists(workspacePath))) {
+      throw new StorageError("当前工作区缺少 bank.json。", "WORKSPACE_MISSING", 404);
+    }
+
+    const dirs = getWorkspaceDirs(workspacePath);
+    const currentRaw = await readFile(dirs.bankPath, "utf8");
+    const currentRevision = revisionForContent(currentRaw);
+    if (currentRevision !== request.baseRevision) {
+      throw new StorageError(
+        "题库已被其他程序修改。当前编辑内容尚未覆盖磁盘文件。",
+        "BANK_CONFLICT",
+        409
+      );
+    }
+
+    const bank = requireValidBank(request.bank);
+    if (!historyCreatedForWorkspace.has(workspacePath)) {
+      await createHistorySnapshot(dirs, currentRaw, currentRevision);
+      historyCreatedForWorkspace.add(workspacePath);
+    }
+    await writeJsonFileAtomic(dirs.bankPath, bank);
+    const raw = serializeJson(bank);
+    return {
+      workspacePath,
+      revision: revisionForContent(raw),
+      bank
+    };
+  });
 }
 
-export async function writeJsonFileAtomic(filePath: string, value: unknown, options: { backup?: boolean } = {}) {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  const tempPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-  const backupPath = `${filePath}.bak`;
-  const content = `${JSON.stringify(value, null, 2)}\n`;
+export async function listRecoveryCandidates(): Promise<RecoveryCandidate[]> {
+  const dirs = await getCurrentWorkspaceDirs();
+  return listRecoveryCandidatesForDirs(dirs);
+}
+
+async function listRecoveryCandidatesForDirs(dirs: WorkspaceDirs): Promise<RecoveryCandidate[]> {
+  const candidates: RecoveryCandidate[] = [];
+  const backupPath = `${dirs.bankPath}.bak`;
+  const backup = await recoveryCandidateFromFile("bank.json.bak", backupPath, "backup");
+  if (backup) candidates.push(backup);
 
   try {
-    await writeFile(tempPath, content, "utf8");
-    if (options.backup !== false && (await fileExists(filePath))) {
-      await copyFile(filePath, backupPath);
+    const files = (await readdir(dirs.historyDir)).filter((file) => file.endsWith(".json")).sort().reverse();
+    for (const file of files.slice(0, 10)) {
+      const candidate = await recoveryCandidateFromFile(file, path.join(dirs.historyDir, file), "history");
+      if (candidate) candidates.push(candidate);
     }
-    await rename(tempPath, filePath);
   } catch (error) {
-    await rm(tempPath, { force: true });
-    throw error;
+    if (!isNotFound(error)) throw error;
   }
+  return candidates;
+}
+
+export async function recoverBank(candidateId: string): Promise<BankSnapshot> {
+  const initialDirs = await getCurrentWorkspaceDirs();
+  return withWorkspaceWriteLock(initialDirs.workspaceDir, async () => {
+    const dirs = await getCurrentWorkspaceDirs();
+    if (dirs.workspaceDir !== initialDirs.workspaceDir) {
+      throw new StorageError("恢复目标已不是当前工作区，请重试。", "WORKSPACE_CHANGED", 409);
+    }
+    const candidates = await listRecoveryCandidatesForDirs(dirs);
+    if (!candidates.some((candidate) => candidate.id === candidateId)) {
+      throw new StorageError("无效或已过期的恢复候选。", "RECOVERY_CANDIDATE_INVALID");
+    }
+    const candidatePath =
+      candidateId === "bank.json.bak"
+        ? `${dirs.bankPath}.bak`
+        : path.join(dirs.historyDir, candidateId);
+    const bank = parseStoredBank(await readFile(candidatePath, "utf8"));
+    await writeJsonFileAtomic(dirs.bankPath, bank, {
+      backup: candidateId !== "bank.json.bak"
+    });
+    const savedRaw = serializeJson(bank);
+    return {
+      workspacePath: dirs.workspaceDir,
+      revision: revisionForContent(savedRaw),
+      bank
+    };
+  });
 }
 
 export function workspaceNameFromPath(workspacePath: string): string {
@@ -342,141 +355,8 @@ export function getDefaultWorkspaceRoot(): string {
   return path.join(os.homedir(), "Documents", "Kaoyan Math Bank");
 }
 
-export function getDefaultSampleWorkspacePath(): string {
-  return path.join(getDefaultWorkspaceRoot(), "Sample Bank");
-}
-
-function normalizeAppState(input: unknown): AppState {
-  const candidate = input as Partial<AppState>;
-  const currentWorkspacePath = safeOptionalString(candidate.currentWorkspacePath);
-  const recentWorkspacePaths = candidate.recentWorkspacePaths ?? [];
-  const normalizedCurrentWorkspacePath = currentWorkspacePath ? path.resolve(currentWorkspacePath) : undefined;
-  const hasCurrentInRecent =
-    normalizedCurrentWorkspacePath &&
-    recentWorkspacePaths.some(
-      (workspacePath) =>
-        typeof workspacePath === "string" && path.resolve(workspacePath) === normalizedCurrentWorkspacePath
-    );
-  return {
-    version: 1,
-    currentWorkspacePath: normalizedCurrentWorkspacePath,
-    recentWorkspacePaths: normalizeRecent(
-      normalizedCurrentWorkspacePath && !hasCurrentInRecent
-        ? [normalizedCurrentWorkspacePath, ...recentWorkspacePaths]
-        : recentWorkspacePaths
-    ),
-    texPathOverride: safeOptionalString(candidate.texPathOverride)
-  };
-}
-
-function normalizeRecent(paths: unknown[]): string[] {
-  const seen = new Set<string>();
-  const recent: string[] = [];
-  for (const item of paths) {
-    if (typeof item !== "string" || !item.trim()) continue;
-    const resolved = path.resolve(item);
-    if (seen.has(resolved)) continue;
-    seen.add(resolved);
-    recent.push(resolved);
-  }
-  return recent.slice(0, 10);
-}
-
-export function normalizeBank(input: unknown): Bank {
-  const candidate = isRecord(input) ? input : {};
-  const settings = normalizeSettings(candidate.settings);
-  const items = Array.isArray(candidate.items) ? candidate.items.map(normalizeItem) : [];
-  return {
-    version: 2,
-    settings,
-    items: items
-      .sort((a, b) => a.order - b.order)
-      .map((item, index) => ({ ...item, order: index + 1 }))
-  };
-}
-
-function normalizeSettings(input: unknown): LatexSettings {
-  const candidate = input as Partial<LatexSettings>;
-  return {
-    pageSize: "a4",
-    spacing: {
-      item: safeString(candidate?.spacing?.item, defaultSettings.spacing.item),
-      module: safeString(candidate?.spacing?.module, defaultSettings.spacing.module)
-    },
-    preamble: safeString(candidate?.preamble, defaultSettings.preamble)
-  };
-}
-
-function normalizeItem(input: unknown, index: number): QuestionItem {
-  const candidate = isRecord(input) ? input : {};
-  const now = new Date().toISOString();
-  return {
-    id: safeString(candidate.id, crypto.randomUUID()),
-    order: Number.isFinite(candidate.order) ? Number(candidate.order) : index + 1,
-    sourceNumber: safeOptionalString(candidate.sourceNumber),
-    chapter: safeString(candidate.chapter, ""),
-    tags: Array.isArray(candidate.tags)
-      ? candidate.tags.map((tag) => safeString(tag, "")).filter(Boolean)
-      : [],
-    star: safeStarRating(candidate.star),
-    modules: normalizeModules(candidate),
-    assets: Array.isArray(candidate.assets) ? candidate.assets.map((asset) => normalizeAsset(asset, now)) : [],
-    createdAt: safeString(candidate.createdAt, now),
-    updatedAt: safeString(candidate.updatedAt, now)
-  };
-}
-
-function normalizeModules(candidate: Record<string, unknown>): QuestionItem["modules"] {
-  const modules = isRecord(candidate.modules) ? candidate.modules : {};
-  return {
-    question: { tex: normalizeModuleTex(modules.question, candidate.questionTex) },
-    solution: { tex: normalizeModuleTex(modules.solution, candidate.solutionTex) },
-    note: { tex: normalizeModuleTex(modules.note, candidate.noteTex) }
-  };
-}
-
-function normalizeModuleTex(moduleValue: unknown, legacyTex: unknown): string {
-  if (isRecord(moduleValue)) return safeString(moduleValue.tex, "");
-  return safeString(legacyTex, "");
-}
-
-function normalizeAsset(input: unknown, now: string): QuestionAsset {
-  const asset = isRecord(input) ? input : {};
-  return {
-    id: safeString(asset.id, crypto.randomUUID()),
-    fileName: safeString(asset.fileName, ""),
-    originalName: safeString(asset.originalName, ""),
-    relativePath: safeString(asset.relativePath, ""),
-    mimeType: safeString(asset.mimeType, ""),
-    size: Number.isFinite(asset.size) ? Number(asset.size) : 0,
-    uploadedAt: safeString(asset.uploadedAt, now)
-  };
-}
-
-function sanitizeWorkspaceName(input: string): string {
-  return input
-    .normalize("NFKC")
-    .replace(/[\\/:*?"<>|]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 72);
-}
-
-function safeString(value: unknown, fallback: string): string {
-  return typeof value === "string" ? value : fallback;
-}
-
 function safeOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function safeStarRating(value: unknown): StarRating {
-  const rating = Number(value);
-  return rating >= 1 && rating <= 5 && Number.isInteger(rating) ? (rating as StarRating) : defaultStarRating;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -490,6 +370,100 @@ async function fileExists(filePath: string): Promise<boolean> {
 
 function isNotFound(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+function serializeJson(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function revisionForContent(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function parseStoredBank(raw: string): Bank {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new StorageError("bank.json 不是有效的 JSON。", "BANK_JSON_INVALID");
+  }
+  return requireValidBank(parsed);
+}
+
+function requireValidBank(value: unknown): Bank {
+  const validation = validateBankPayload(value);
+  if (!validation.ok || !validation.value) {
+    throw new StorageError(validation.error ?? "题库数据无效。", "BANK_INVALID");
+  }
+  return validation.value;
+}
+
+async function withWorkspaceWriteLock<T>(workspacePath: string, operation: () => Promise<T>): Promise<T> {
+  const previous = workspaceWriteQueues.get(workspacePath) ?? Promise.resolve();
+  const current = previous.catch(() => undefined).then(operation);
+  workspaceWriteQueues.set(workspacePath, current);
+  try {
+    return await current;
+  } finally {
+    if (workspaceWriteQueues.get(workspacePath) === current) {
+      workspaceWriteQueues.delete(workspacePath);
+    }
+  }
+}
+
+async function createHistorySnapshot(dirs: WorkspaceDirs, raw: string, revision: string) {
+  await mkdir(dirs.historyDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const fileName = `${timestamp}-${revision.slice(0, 12)}.json`;
+  await writeFile(path.join(dirs.historyDir, fileName), raw, "utf8");
+  const files = (await readdir(dirs.historyDir)).filter((file) => file.endsWith(".json")).sort().reverse();
+  await Promise.all(files.slice(10).map((file) => rm(path.join(dirs.historyDir, file), { force: true })));
+}
+
+async function recoveryCandidateFromFile(
+  id: string,
+  filePath: string,
+  source: RecoveryCandidate["source"]
+): Promise<RecoveryCandidate | null> {
+  try {
+    parseStoredBank(await readFile(filePath, "utf8"));
+    const metadata = await stat(filePath);
+    return {
+      id,
+      label: source === "backup" ? "最近一次保存前的备份" : `历史快照 ${metadata.mtime.toLocaleString()}`,
+      createdAt: metadata.mtime.toISOString(),
+      source
+    };
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    if (error instanceof StorageError) return null;
+    throw error;
+  }
+}
+
+export async function cleanupOldTempDirs(workspacePath: string, maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
+  const { tempDir } = getWorkspaceDirs(workspacePath);
+  let entries: string[];
+  try {
+    entries = await readdir(tempDir);
+  } catch (error) {
+    if (isNotFound(error)) return;
+    throw error;
+  }
+  const cutoff = Date.now() - maxAgeMs;
+  await Promise.all(
+    entries.map(async (entry) => {
+      const target = path.join(tempDir, entry);
+      try {
+        const metadata = await stat(target);
+        if (metadata.mtimeMs < cutoff) {
+          await rm(target, { recursive: true, force: true });
+        }
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+      }
+    })
+  );
 }
 
 export async function workspaceExists(workspacePath: string): Promise<boolean> {

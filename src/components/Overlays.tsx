@@ -5,16 +5,21 @@ export function Overlays({ app }: { app: QuestionBankController }) {
   return (
     <>
       {app.reorderMenu && (
-        <div className="contextMenu" style={{ left: app.reorderMenu.x, top: app.reorderMenu.y }}>
-          <button type="button" onClick={() => app.addItem({ type: "insertAfter", afterId: app.reorderMenu!.id })}>
+        <div
+          className="contextMenu"
+          role="menu"
+          aria-label="题目操作"
+          style={{ left: app.reorderMenu.x, top: app.reorderMenu.y }}
+        >
+          <button role="menuitem" type="button" onClick={() => app.addItem({ type: "insertAfter", afterId: app.reorderMenu!.id })}>
             <Plus size={16} />
             在此题后插入
           </button>
-          <button type="button" onClick={() => app.openReorderDialog(app.reorderMenu!.id)}>
+          <button role="menuitem" type="button" onClick={() => app.openReorderDialog(app.reorderMenu!.id)}>
             <ListOrdered size={16} />
             更改题序至...
           </button>
-          <button className="danger" type="button" onClick={() => app.deleteItem(app.reorderMenu!.id)}>
+          <button role="menuitem" className="danger" type="button" onClick={() => app.deleteItem(app.reorderMenu!.id)}>
             <Trash2 size={16} />
             删除
           </button>
@@ -22,14 +27,19 @@ export function Overlays({ app }: { app: QuestionBankController }) {
       )}
 
       {app.addMenu && (
-        <div className="contextMenu" style={{ left: app.addMenu.x, top: app.addMenu.y }}>
+        <div
+          className="contextMenu"
+          role="menu"
+          aria-label="新增题目"
+          style={{ left: app.addMenu.x, top: app.addMenu.y }}
+        >
           {app.activeItem && (
-            <button type="button" onClick={() => app.addItem({ type: "insertAfter", afterId: app.activeItem!.id })}>
+            <button role="menuitem" type="button" onClick={() => app.addItem({ type: "insertAfter", afterId: app.activeItem!.id })}>
               <Plus size={16} />
               在当前题后插入
             </button>
           )}
-          <button type="button" onClick={() => app.addItem({ type: "append" })}>
+          <button role="menuitem" type="button" onClick={() => app.addItem({ type: "append" })}>
             <Plus size={16} />
             追加到末尾
           </button>
@@ -50,6 +60,7 @@ function ReorderDialog({ app }: { app: QuestionBankController }) {
       className="modalBackdrop"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="reorder-dialog-title"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) app.closeReorderDialog();
       }}
@@ -66,7 +77,7 @@ function ReorderDialog({ app }: { app: QuestionBankController }) {
         }}
       >
         <header>
-          <h2>更改题序</h2>
+          <h2 id="reorder-dialog-title">更改题序</h2>
           <span>
             当前第 {app.numberById.get(item.id)} 题 / 共 {app.orderedItems.length} 题
           </span>

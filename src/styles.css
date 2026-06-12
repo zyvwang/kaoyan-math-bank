@@ -47,6 +47,15 @@ button:disabled {
   opacity: 0.58;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.32);
+  outline-offset: 2px;
+}
+
 .loadingScreen {
   min-height: 100vh;
   display: grid;
@@ -129,6 +138,24 @@ button:disabled {
 .setupNotice.error {
   color: var(--coral);
   border-color: #e7b8ad;
+}
+
+.recoveryPanel {
+  width: min(640px, 100%);
+}
+
+.recoveryList {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.recoveryList > strong {
+  font-size: 14px;
+}
+
+.recoveryList .secondaryAction {
+  justify-content: flex-start;
 }
 
 .appShell {
@@ -665,6 +692,18 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.notice button {
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  font-weight: 700;
+}
+
+.notice button:hover {
+  background: rgba(23, 33, 29, 0.07);
 }
 
 .metaStrip {

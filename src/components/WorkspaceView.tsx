@@ -36,10 +36,32 @@ function TopBar({ app }: { app: QuestionBankController }) {
           {app.saveState === "saving" ? "保存中" : app.saveState === "error" ? "保存失败" : "已保存"}
         </span>
         {app.notice && (
-          <a className={`notice ${app.notice.type}`} href={app.notice.href} target="_blank" rel="noreferrer">
+          <div className={`notice ${app.notice.type}`}>
             {app.notice.type === "error" ? <AlertTriangle size={15} /> : <Check size={15} />}
             <span>{app.notice.text}</span>
-          </a>
+            {app.saveState === "error" && (
+              <button type="button" onClick={() => void app.retrySave()}>
+                重试保存
+              </button>
+            )}
+            {app.canUndoDelete && (
+              <button type="button" onClick={app.undoDelete}>
+                撤销
+              </button>
+            )}
+            {app.notice.href && (
+              <button
+                type="button"
+                onClick={() => {
+                  const url = new URL(app.notice!.href!, window.location.href).href;
+                  if (window.kmb?.openExternal) void window.kmb.openExternal(url);
+                  else window.open(url, "_blank", "noopener,noreferrer");
+                }}
+              >
+                打开
+              </button>
+            )}
+          </div>
         )}
       </div>
       <div className="toolbar">
