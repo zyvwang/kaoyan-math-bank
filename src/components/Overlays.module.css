@@ -1,0 +1,80 @@
+.contextMenu {
+  position: fixed;
+  z-index: 70;
+  min-width: 184px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: 0 14px 34px rgb(23 33 29 / 0.18);
+}
+.contextMenu button {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+.danger { color: var(--coral) !important; }
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(23 33 29 / 0.28);
+  overscroll-behavior: contain;
+}
+.reorderDialog {
+  width: min(430px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 19px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: 0 22px 54px rgb(23 33 29 / 0.2);
+}
+.reorderDialog header,
+.reorderDialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.reorderDialog h2 { margin: 0; font-family: "Songti SC", "Noto Serif CJK SC", serif; font-size: 20px; }
+.reorderDialog header span,
+.reorderDialog label span { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.reorderDialog label {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 11px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+.reorderDialog input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.reorderError { margin: -4px 0 0; color: var(--coral); font-size: 13px; }
+
+@media (hover: hover) {
+  .contextMenu button:hover { color: var(--teal-strong); background: var(--teal-soft); }
+  .contextMenu button.danger:hover { background: oklch(0.95 0.035 30); }
+}
+
+@media (max-width: 520px) {
+  .reorderDialog footer { display: grid; grid-template-columns: 1fr 1fr; }
+}

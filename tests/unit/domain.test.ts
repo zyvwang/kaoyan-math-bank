@@ -15,28 +15,37 @@ import {
 import {
   appDataDir,
   appStatePath,
-  cleanupOldTempDirs,
+  updateAppState,
+  writeAppState
+} from "../../server/app-state.js";
+import {
   createEmptyBank,
-  createEmptyWorkspace,
   createSampleBank,
-  createSampleWorkspace,
-  listRecoveryCandidates,
-  moveWorkspace,
-  normalizeBank,
-  readAppState,
+  normalizeBank
+} from "../../server/bank-schema.js";
+import {
   readBank,
   readBankSnapshot,
-  recoverBank,
+  saveBankSnapshot
+} from "../../server/bank-storage.js";
+import { writeJsonFileAtomic } from "../../server/json-file.js";
+import {
+  cleanupOldTempDirs,
+  listRecoveryCandidates,
+  recoverBank
+} from "../../server/recovery-storage.js";
+import {
+  createEmptyWorkspace,
+  createSampleWorkspace,
+  moveWorkspace,
+  readAppState,
   removeWorkspace,
-  saveBankSnapshot,
-  switchWorkspace,
-  updateAppState,
-  writeAppState,
-  writeJsonFileAtomic
-} from "../../server/storage.js";
+  switchWorkspace
+} from "../../server/workspace-storage.js";
 import type { QuestionItem } from "../../shared/types.js";
 import { moveItemToPositionInList, reorderItemByDrop } from "../../src/itemOrder.js";
 import { nextWheelScrollState, wheelDeltaToPixels } from "../../src/wheelScroll.js";
+import { validateReorderTarget } from "../../src/questionReorder.js";
 
 const fixedNow = "2026-01-01T00:00:00.000Z";
 const workspacePath = path.resolve(".tmp/vitest-unit-workspace");
@@ -74,6 +83,9 @@ describe("domain helpers", () => {
     equal(nearBottomWheel.scrollTop, 100);
     equal(nearBottomWheel.changed, true);
     deepStrictEqual(wheelDeltaToPixels(1, 1, 2, 320, 240), { deltaX: 320, deltaY: 240 });
+    equal(validateReorderTarget("2", 4), null);
+    equal(validateReorderTarget("0", 4), "题序需在 1 到 4 之间。");
+    equal(validateReorderTarget("1.5", 4), "请输入有效的整数题序。");
   });
 
   it("keeps export order deterministic and strips full-document wrappers", () => {

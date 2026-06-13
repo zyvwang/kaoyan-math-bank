@@ -1,26 +1,28 @@
 import { FolderInput, FolderPlus } from "lucide-react";
-import type { QuestionBankController } from "../hooks/useQuestionBankApp.js";
+import { useLifecycle, useWorkspace } from "../context/questionBankContexts.js";
+import controls from "../styles/controls.module.css";
+import styles from "./SetupScreen.module.css";
 
-export function SetupScreen({ app }: { app: QuestionBankController }) {
+export function SetupScreen() {
+  const lifecycle = useLifecycle();
+  const workspace = useWorkspace();
   return (
-    <main className="setupShell">
-      <section className="setupPanel">
-        <div className="setupCopy">
-          <span>Kaoyan Math Bank</span>
+    <main className={styles.setupShell}>
+      <section className={styles.setupPanel}>
+        <div className={styles.setupCopy}>
+          <span>考研数学一题库</span>
           <h1>选择第一个题库工作区</h1>
-          <p>工作区是一个普通文件夹，里面会保存 bank.json、图片、导出文件和临时编译文件。</p>
+          <p>工作区是一个普通文件夹，保存 bank.json、图片、导出文件和临时编译文件。</p>
         </div>
-        <div className="setupActions">
-          <button className="primaryAction" onClick={() => void app.createSampleWorkspace()} disabled={app.isChangingWorkspace}>
-            <FolderPlus size={18} />
-            创建示例工作区
+        <div className={styles.setupActions}>
+          <button className={controls.primaryAction} onClick={() => void workspace.createSampleWorkspace()} disabled={workspace.isChangingWorkspace}>
+            <FolderPlus size={18} />创建示例工作区
           </button>
-          <button className="secondaryAction" onClick={() => void app.openWorkspace()} disabled={app.isChangingWorkspace}>
-            <FolderInput size={18} />
-            打开已有工作区
+          <button className={controls.secondaryAction} onClick={() => void workspace.openWorkspace()} disabled={workspace.isChangingWorkspace}>
+            <FolderInput size={18} />打开已有工作区
           </button>
         </div>
-        {app.notice && <p className={`setupNotice ${app.notice.type}`}>{app.notice.text}</p>}
+        {lifecycle.notice && <p className={`${styles.setupNotice} ${styles[lifecycle.notice.type]}`}>{lifecycle.notice.text}</p>}
       </section>
     </main>
   );

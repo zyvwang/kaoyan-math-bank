@@ -1,0 +1,60 @@
+.iconButton {
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 2px rgb(23 33 29 / 0.07);
+  transition: transform 140ms var(--ease-out), background-color 140ms ease, border-color 140ms ease;
+}
+
+.primary {
+  color: white;
+  background: var(--teal);
+  border-color: var(--teal);
+}
+
+.danger { color: var(--coral); }
+
+.primaryAction,
+.secondaryAction {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  transition: transform 140ms var(--ease-out), background-color 140ms ease, border-color 140ms ease;
+}
+
+.primaryAction {
+  color: white;
+  background: var(--teal);
+  border: 1px solid var(--teal);
+}
+
+.secondaryAction {
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+}
+
+.iconButton:active,
+.primaryAction:active,
+.secondaryAction:active { transform: scale(0.96); }
+
+@media (hover: hover) {
+  .iconButton:hover,
+  .secondaryAction:hover {
+    background: var(--teal-soft);
+    border-color: oklch(0.76 0.055 175);
+  }
+  .primary:hover,
+  .primaryAction:hover { background: var(--teal-strong); }
+}

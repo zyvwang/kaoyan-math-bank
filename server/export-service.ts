@@ -10,7 +10,8 @@ import {
   sanitizeFileName,
   selectedItems
 } from "./latex.js";
-import { getWorkspaceDirs, StorageError } from "./storage.js";
+import { StorageError } from "./storage-types.js";
+import { getWorkspaceDirs } from "./workspace-storage.js";
 
 export async function exportBank(
   bank: Bank,

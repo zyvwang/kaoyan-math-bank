@@ -23,7 +23,7 @@ test("persists an edited item in the packaged desktop runtime", async () => {
   try {
     const page = await electronApp.firstWindow();
     const browserWindow = await electronApp.browserWindow(page);
-    await expect(page.getByText("暂无题目")).toBeVisible();
+    await expect(page.getByText("当前工作区还没有题目")).toBeVisible();
     expect(await page.evaluate(() => Boolean(window.kmb))).toBe(true);
     const runtimePaths = await electronApp.evaluate(({ app }) => ({
       userData: app.getPath("userData"),
@@ -103,16 +103,17 @@ test("keeps MathJax previews working after switching questions", async () => {
     const page = await electronApp.firstWindow();
     await expect(page.getByLabel("原编号")).toHaveValue("自造示例 1");
     await expect
-      .poll(() => page.locator(".previewPane").nth(0).locator("mjx-container").count())
+      .poll(() => page.locator('[role="tabpanel"] mjx-container').count())
       .toBeGreaterThan(0);
 
     await page.getByText("自造示例 2", { exact: true }).click();
     await expect(page.getByLabel("原编号")).toHaveValue("自造示例 2");
     await expect
-      .poll(() => page.locator(".previewPane").nth(0).locator("mjx-container").count())
+      .poll(() => page.locator('[role="tabpanel"] mjx-container').count())
       .toBeGreaterThan(0);
+    await page.getByRole("tab", { name: /解析/ }).click();
     await expect
-      .poll(() => page.locator(".previewPane").nth(1).locator("mjx-container").count())
+      .poll(() => page.locator('[role="tabpanel"] mjx-container').count())
       .toBeGreaterThan(0);
   } finally {
     await electronApp.evaluate(({ app }) => app.exit(0)).catch(() => undefined);

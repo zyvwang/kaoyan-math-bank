@@ -15,5 +15,15 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["server", "scripts", "shared", "tests", "src/global.d.ts", "vite.config.ts", "vitest*.config.ts", "eslint.config.js"]
+  "include": [
+    "server",
+    "scripts",
+    "shared",
+    "tests",
+    "src/global.d.ts",
+    "src/css-modules.d.ts",
+    "vite.config.ts",
+    "vitest*.config.ts",
+    "eslint.config.js"
+  ]
 }

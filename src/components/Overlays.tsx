@@ -1,108 +1,96 @@
 import { ListOrdered, Plus, Trash2 } from "lucide-react";
-import type { QuestionBankController } from "../hooks/useQuestionBankApp.js";
+import { useQuestions, useWorkspaceUi } from "../context/questionBankContexts.js";
+import controls from "../styles/controls.module.css";
+import styles from "./Overlays.module.css";
 
-export function Overlays({ app }: { app: QuestionBankController }) {
+export function Overlays() {
+  const questions = useQuestions();
+  const ui = useWorkspaceUi();
   return (
     <>
-      {app.reorderMenu && (
+      {ui.reorderMenu && (
         <div
-          className="contextMenu"
+          className={styles.contextMenu}
+          data-context-menu
           role="menu"
           aria-label="题目操作"
-          style={{ left: app.reorderMenu.x, top: app.reorderMenu.y }}
+          style={{ left: ui.reorderMenu.x, top: ui.reorderMenu.y }}
         >
-          <button role="menuitem" type="button" onClick={() => app.addItem({ type: "insertAfter", afterId: app.reorderMenu!.id })}>
-            <Plus size={16} />
-            在此题后插入
+          <button role="menuitem" onClick={() => questions.addItem({ type: "insertAfter", afterId: ui.reorderMenu!.id })}>
+            <Plus size={16} />在此题后插入
           </button>
-          <button role="menuitem" type="button" onClick={() => app.openReorderDialog(app.reorderMenu!.id)}>
-            <ListOrdered size={16} />
-            更改题序至...
+          <button role="menuitem" onClick={() => ui.openReorderDialog(ui.reorderMenu!.id)}>
+            <ListOrdered size={16} />更改题序至...
           </button>
-          <button role="menuitem" className="danger" type="button" onClick={() => app.deleteItem(app.reorderMenu!.id)}>
-            <Trash2 size={16} />
-            删除
+          <button role="menuitem" className={styles.danger} onClick={() => questions.deleteItem(ui.reorderMenu!.id)}>
+            <Trash2 size={16} />删除
           </button>
         </div>
       )}
-
-      {app.addMenu && (
+      {ui.addMenu && (
         <div
-          className="contextMenu"
+          className={styles.contextMenu}
+          data-context-menu
           role="menu"
           aria-label="新增题目"
-          style={{ left: app.addMenu.x, top: app.addMenu.y }}
+          style={{ left: ui.addMenu.x, top: ui.addMenu.y }}
         >
-          {app.activeItem && (
-            <button role="menuitem" type="button" onClick={() => app.addItem({ type: "insertAfter", afterId: app.activeItem!.id })}>
-              <Plus size={16} />
-              在当前题后插入
+          {questions.activeItem && (
+            <button role="menuitem" onClick={() => questions.addItem({ type: "insertAfter", afterId: questions.activeItem!.id })}>
+              <Plus size={16} />在当前题后插入
             </button>
           )}
-          <button role="menuitem" type="button" onClick={() => app.addItem({ type: "append" })}>
-            <Plus size={16} />
-            追加到末尾
+          <button role="menuitem" onClick={() => questions.addItem({ type: "append" })}>
+            <Plus size={16} />追加到末尾
           </button>
         </div>
       )}
-
-      {app.reorderDialogItem && <ReorderDialog app={app} />}
+      {ui.reorderDialogItem && <ReorderDialog />}
     </>
   );
 }
 
-function ReorderDialog({ app }: { app: QuestionBankController }) {
-  const item = app.reorderDialogItem;
+function ReorderDialog() {
+  const questions = useQuestions();
+  const ui = useWorkspaceUi();
+  const item = ui.reorderDialogItem;
   if (!item) return null;
-
   return (
     <div
-      className="modalBackdrop"
+      className={styles.modalBackdrop}
       role="dialog"
       aria-modal="true"
       aria-labelledby="reorder-dialog-title"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) app.closeReorderDialog();
-      }}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) ui.closeReorderDialog(); }}
     >
       <form
-        className="reorderDialog"
+        className={styles.reorderDialog}
         noValidate
-        onSubmit={app.submitReorder}
+        onSubmit={ui.submitReorder}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             event.preventDefault();
-            app.closeReorderDialog();
+            ui.closeReorderDialog();
           }
         }}
       >
         <header>
           <h2 id="reorder-dialog-title">更改题序</h2>
-          <span>
-            当前第 {app.numberById.get(item.id)} 题 / 共 {app.orderedItems.length} 题
-          </span>
+          <span>当前第 {questions.numberById.get(item.id)} 题 / 共 {questions.orderedItems.length} 题</span>
         </header>
         <label>
           <span>目标题序</span>
           <input
-            ref={app.reorderInputRef}
-            type="text"
-            value={app.reorderTarget}
+            ref={ui.reorderInputRef}
+            value={ui.reorderTarget}
             inputMode="numeric"
-            onChange={(event) => {
-              app.setReorderTarget(event.target.value);
-              app.setReorderError("");
-            }}
+            onChange={(event) => { ui.setReorderTarget(event.target.value); ui.setReorderError(""); }}
           />
         </label>
-        {app.reorderError && <p className="reorderError">{app.reorderError}</p>}
+        {ui.reorderError && <p className={styles.reorderError}>{ui.reorderError}</p>}
         <footer>
-          <button type="button" className="secondaryAction" onClick={app.closeReorderDialog}>
-            取消
-          </button>
-          <button type="submit" className="primaryAction">
-            确认
-          </button>
+          <button type="button" className={controls.secondaryAction} onClick={ui.closeReorderDialog}>取消</button>
+          <button type="submit" className={controls.primaryAction}>确认</button>
         </footer>
       </form>
     </div>

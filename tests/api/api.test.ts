@@ -3,7 +3,8 @@ import path from "node:path";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApiApp } from "../../server/index.js";
-import { appDataDir, createSampleBank } from "../../server/storage.js";
+import { appDataDir } from "../../server/app-state.js";
+import { createSampleBank } from "../../server/bank-schema.js";
 
 const workspacePath = path.resolve(".tmp/vitest-api-workspace");
 

@@ -1,58 +1,44 @@
 import { FolderOpen, RefreshCw, RotateCcw } from "lucide-react";
-import type { QuestionBankController } from "../hooks/useQuestionBankApp.js";
+import { useLifecycle, useWorkspace } from "../context/questionBankContexts.js";
+import controls from "../styles/controls.module.css";
+import styles from "./SetupScreen.module.css";
 
-export function RecoveryScreen({ app }: { app: QuestionBankController }) {
+export function RecoveryScreen() {
+  const lifecycle = useLifecycle();
+  const workspace = useWorkspace();
+  const reportError = (error: unknown, fallback: string) =>
+    lifecycle.setNotice({ type: "error", text: error instanceof Error ? error.message : fallback });
   return (
-    <main className="setupShell">
-      <section className="setupPanel recoveryPanel">
-        <div className="setupCopy">
+    <main className={styles.setupShell}>
+      <section className={`${styles.setupPanel} ${styles.recoveryPanel}`}>
+        <div className={styles.setupCopy}>
           <span>题库读取失败</span>
           <h1>磁盘数据没有被覆盖</h1>
-          <p>{app.loadError}</p>
+          <p>{lifecycle.loadError}</p>
         </div>
-        <div className="setupActions">
-          <button
-            className="primaryAction"
-            onClick={() => {
-              void app.retryInitialLoad().catch((error) =>
-                app.setNotice({
-                  type: "error",
-                  text: error instanceof Error ? error.message : "重新读取失败。"
-                })
-              );
-            }}
-          >
-            <RefreshCw size={18} />
-            重试
+        <div className={styles.setupActions}>
+          <button className={controls.primaryAction} onClick={() => void lifecycle.retryInitialLoad().catch((error) => reportError(error, "重新读取失败。"))}>
+            <RefreshCw size={18} />重试
           </button>
-          <button className="secondaryAction" onClick={app.openCurrentWorkspaceFolder}>
-            <FolderOpen size={18} />
-            打开工作区
+          <button className={controls.secondaryAction} onClick={workspace.openCurrentWorkspaceFolder}>
+            <FolderOpen size={18} />打开工作区
           </button>
         </div>
-        {app.recoveryCandidates.length > 0 && (
-          <div className="recoveryList">
+        {lifecycle.recoveryCandidates.length > 0 && (
+          <div className={styles.recoveryList}>
             <strong>可恢复版本</strong>
-            {app.recoveryCandidates.map((candidate) => (
+            {lifecycle.recoveryCandidates.map((candidate) => (
               <button
                 key={candidate.id}
-                className="secondaryAction"
-                onClick={() => {
-                  void app.recoverFromCandidate(candidate.id).catch((error) =>
-                    app.setNotice({
-                      type: "error",
-                      text: error instanceof Error ? error.message : "恢复失败。"
-                    })
-                  );
-                }}
+                className={controls.secondaryAction}
+                onClick={() => void lifecycle.recoverFromCandidate(candidate.id).catch((error) => reportError(error, "恢复失败。"))}
               >
-                <RotateCcw size={16} />
-                {candidate.label}
+                <RotateCcw size={16} />{candidate.label}
               </button>
             ))}
           </div>
         )}
-        {app.notice && <p className={`setupNotice ${app.notice.type}`}>{app.notice.text}</p>}
+        {lifecycle.notice && <p className={`${styles.setupNotice} ${styles[lifecycle.notice.type]}`}>{lifecycle.notice.text}</p>}
       </section>
     </main>
   );

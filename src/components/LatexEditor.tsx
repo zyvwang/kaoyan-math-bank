@@ -4,6 +4,7 @@ import { StreamLanguage } from "@codemirror/language";
 import { stex } from "@codemirror/legacy-modes/mode/stex";
 import { EditorView } from "@codemirror/view";
 import { bindWheelScroller } from "../utils/wheel.js";
+import styles from "./ModuleEditor.module.css";
 
 const latexExtension = StreamLanguage.define(stex);
 const editorScrollPadding = EditorView.theme({
@@ -26,7 +27,7 @@ export default function LatexEditor({ value, onChange }: { value: string; onChan
   }, []);
 
   return (
-    <div className="editorPane" ref={editorPaneRef}>
+    <div className={styles.editorPane} ref={editorPaneRef}>
       <CodeMirror
         value={value}
         height="100%"

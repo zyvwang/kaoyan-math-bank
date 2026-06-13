@@ -1,7 +1,11 @@
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { appDataDir, createEmptyWorkspace, isKnownWorkspacePath } from "../../server/storage.js";
+import { appDataDir } from "../../server/app-state.js";
+import {
+  createEmptyWorkspace,
+  isKnownWorkspacePath
+} from "../../server/workspace-storage.js";
 
 const workspacePath = path.resolve(".tmp/vitest-electron-workspace");
 const unrelatedPath = path.resolve(".tmp/vitest-electron-unrelated");
@@ -41,12 +45,15 @@ describe("Electron shell path allowlist", () => {
       scripts?: { "dist:mac"?: string };
     };
     const viteSource = await readFile(path.resolve("vite.config.ts"), "utf8");
-    const serverSource = await readFile(path.resolve("server/index.ts"), "utf8");
+    const serverMiddlewareSource = await readFile(
+      path.resolve("server/http/middleware.ts"),
+      "utf8"
+    );
     const previewSource = await readFile(path.resolve("src/utils/preview.ts"), "utf8");
 
     expect(viteSource).toContain("script-src 'self' 'unsafe-inline'");
     expect(viteSource).toContain("worker-src 'self' blob:");
-    expect(serverSource).toContain("worker-src 'self' blob:");
+    expect(serverMiddlewareSource).toContain("worker-src 'self' blob:");
     expect(previewSource).toContain('fonts: "/vendor/mathjax-fonts"');
     expect(mainSource).toContain("if (isDevelopment)");
     expect(mainSource).toContain("if (configuredAppDataDir)");

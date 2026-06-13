@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { getWorkspaceDirs, writeJsonFileAtomic } from "../server/storage.js";
+import { getWorkspaceDirs } from "../server/workspace-storage.js";
+import { writeJsonFileAtomic } from "../server/json-file.js";
 import { validateBankPayload } from "../shared/validation.js";
 
 const args = process.argv.slice(2);

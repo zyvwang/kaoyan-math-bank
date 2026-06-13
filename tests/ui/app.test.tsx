@@ -97,6 +97,23 @@ describe("App UI", () => {
     expect(screen.getByText("2024-2")).toBeInTheDocument();
   });
 
+  it("switches focused modules with the keyboard and opens overview mode", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("2024-1");
+
+    const questionTab = screen.getByRole("tab", { name: /题目/ });
+    questionTab.focus();
+    await user.keyboard("{ArrowRight}");
+
+    expect(screen.getByRole("tab", { name: /解析/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("latex-editor")).toHaveValue("答案。");
+
+    await user.click(screen.getByRole("button", { name: "总览" }));
+    expect(screen.getByRole("button", { name: "总览" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByRole("button", { name: "编辑" })).toHaveLength(3);
+  });
+
   it("autosaves metadata edits", async () => {
     const user = userEvent.setup();
     render(<App />);

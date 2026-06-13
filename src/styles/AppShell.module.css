@@ -1,0 +1,29 @@
+.appShell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(312px, 336px) minmax(0, 1fr);
+  background: var(--paper);
+}
+
+.skipLink {
+  position: fixed;
+  z-index: 200;
+  top: 8px;
+  left: 8px;
+  transform: translateY(-140%);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--ink);
+  color: var(--panel);
+  transition: transform 140ms var(--ease-out);
+}
+
+.skipLink:focus { transform: translateY(0); }
+
+@media (max-width: 1180px) and (min-width: 761px) {
+  .appShell { grid-template-columns: 300px minmax(0, 1fr); }
+}
+
+@media (max-width: 760px) {
+  .appShell { display: block; }
+}

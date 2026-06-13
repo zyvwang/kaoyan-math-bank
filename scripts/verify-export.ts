@@ -10,7 +10,8 @@ import {
   detectTexInstallation,
   orderItemsForExport
 } from "../server/latex.js";
-import { defaultSettings, getCurrentWorkspaceDirs } from "../server/storage.js";
+import { defaultSettings } from "../server/bank-schema.js";
+import { getCurrentWorkspaceDirs } from "../server/workspace-storage.js";
 import type { QuestionItem } from "../shared/types.js";
 
 const workspaceDirs = await getCurrentWorkspaceDirs();

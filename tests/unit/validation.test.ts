@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSampleBank } from "../../server/storage.js";
+import { createSampleBank } from "../../server/bank-schema.js";
 import {
   isRecord,
   validateBankPayload,

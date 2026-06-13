@@ -16,23 +16,27 @@ The shared API and data contracts live in `shared/`. Frontend and backend module
 
 ## Frontend Boundaries
 
-- `src/App.tsx` is only the composition root.
-- `src/hooks/useQuestionBankApp.ts` is the facade that composes focused hooks for workspace state, derived lists, persistence, selection, reordering, compile, and export actions.
+- `src/App.tsx` is only the composition root and screen-state switch.
+- `src/context/QuestionBankProvider.tsx` exposes six focused contexts: lifecycle, workspace, questions, selection, compile/export, and workspace UI. Components consume only the domains they render.
+- `src/hooks/useQuestionBankModel.ts` composes workspace state, derived lists, persistence, selection, reordering, compile, and export actions. `useQuestionBankContextValues.ts` turns that model into memoized context values with stable action references.
 - `src/hooks/useAutosave.ts` owns the single-flight, coalescing save queue and its `flush()` boundary.
+- Question item mutations, drag tracking, and menus/reorder dialogs live in separate hooks instead of one interaction controller.
 - `src/components/` contains focused view components for setup, sidebar, workspace, module editors, preview, and overlays.
 - CodeMirror is isolated in `src/components/LatexEditor.tsx` and lazy-loaded by `ModuleEditor`, keeping the initial Vite bundle smaller.
 - `src/api/client.ts` is the only place that should call `fetch` for app API routes.
+- `src/styles/foundation.css` owns global tokens and reset rules. Shared controls and component styling use CSS Modules.
 
 ## Backend Boundaries
 
-- `server/index.ts` owns HTTP routing, request validation, origin checks, and response status codes.
+- `server/index.ts` only assembles middleware, routers, frontend serving, and server startup.
+- `server/routes/` groups workspace, bank/recovery, and document/export HTTP adapters. `server/http/` owns shared middleware and API error responses.
 - `server/app-state.ts` owns pure app-state reads and serialized app-state updates.
 - `server/bank-schema.ts` owns v1/v2 normalization and default/sample bank creation.
 - `server/json-file.ts` owns atomic JSON writes and immediate `.bak` files.
-- `server/storage.ts` owns workspace lifecycle, revision-checked bank saves, history snapshots, recovery, and shell path allowlist helpers.
+- `server/storage.ts` is a compatibility facade. Workspace lifecycle, revision-checked bank saves, and recovery/history are implemented by separate storage modules.
 - `server/asset-service.ts` validates image extension, MIME, and signature before generating a safe server-side filename.
 - `server/export-service.ts` stages and compiles exports before atomically replacing the final directory.
-- `server/latex.ts` owns export ordering, LaTeX document generation, asset copying, TeX detection, and compilation.
+- `server/latex.ts` is a compatibility facade. Pure rendering, workspace file preparation, and TeX process management live in separate modules.
 
 ## Data Safety
 

@@ -5,37 +5,47 @@ import { RecoveryScreen } from "./components/RecoveryScreen.js";
 import { SetupScreen } from "./components/SetupScreen.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { WorkspaceView } from "./components/WorkspaceView.js";
-import { useQuestionBankApp } from "./hooks/useQuestionBankApp.js";
+import { QuestionBankProvider } from "./context/QuestionBankProvider.js";
+import {
+  useLifecycle,
+  useQuestions,
+  useWorkspace
+} from "./context/questionBankContexts.js";
+import styles from "./styles/AppShell.module.css";
 
-function App() {
-  const app = useQuestionBankApp();
-  const { flushPendingChanges } = app;
-  const flushPendingChangesRef = useRef(flushPendingChanges);
-  flushPendingChangesRef.current = flushPendingChanges;
+function AppContent() {
+  const lifecycle = useLifecycle();
+  const workspace = useWorkspace();
+  const questions = useQuestions();
+  const flushRef = useRef(lifecycle.flushPendingChanges);
+  flushRef.current = lifecycle.flushPendingChanges;
 
   useEffect(() => {
-    return window.kmb?.onBeforeClose?.(() => flushPendingChangesRef.current());
+    return window.kmb?.onBeforeClose?.(() => flushRef.current());
   }, []);
 
-  if (app.loadError) {
-    return <RecoveryScreen app={app} />;
-  }
-
-  if (!app.bank || !app.appInfo) {
-    return <LoadingScreen />;
-  }
-
-  if (app.appInfo.setupRequired) {
-    return <SetupScreen app={app} />;
-  }
+  if (lifecycle.loadError) return <RecoveryScreen />;
+  if (!questions.bank || !workspace.appInfo) return <LoadingScreen />;
+  if (workspace.appInfo.setupRequired) return <SetupScreen />;
 
   return (
-    <main className="appShell">
-      <Sidebar app={app} />
-      <WorkspaceView app={app} />
-      <Overlays app={app} />
-    </main>
+    <>
+      <a className={styles.skipLink} href="#main-workspace">
+        跳到编辑区
+      </a>
+      <main className={styles.appShell}>
+        <Sidebar />
+        <WorkspaceView />
+        <Overlays />
+      </main>
+    </>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <QuestionBankProvider>
+      <AppContent />
+    </QuestionBankProvider>
+  );
+}

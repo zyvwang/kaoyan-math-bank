@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AssetUploadResponse, QuestionAsset } from "../shared/types.js";
-import { getCurrentWorkspaceDirs } from "./storage.js";
+import { getCurrentWorkspaceDirs } from "./workspace-storage.js";
 
 interface UploadedFile {
   buffer: Buffer;

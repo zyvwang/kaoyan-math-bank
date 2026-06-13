@@ -1,0 +1,45 @@
+.previewPane {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 28px 28px 72px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  background: oklch(0.993 0.008 90);
+  font-family: "Songti SC", "Noto Serif CJK SC", serif;
+  font-size: 17px;
+  line-height: 1.82;
+}
+.compact { min-height: 160px; height: auto; padding: 22px 26px 30px; overflow: visible; }
+.previewPane::-webkit-scrollbar { width: 10px; height: 10px; }
+.previewPane::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgb(108 117 111 / 0.44);
+  background-clip: content-box;
+}
+.previewPane > :first-child { margin-top: 0; }
+.previewPane > :last-child { margin-bottom: 0; }
+.latexText { white-space: pre-wrap; overflow-wrap: anywhere; }
+.previewImage { margin: 10px auto; text-align: center; }
+.previewImage img {
+  max-width: 82%;
+  max-height: 320px;
+  object-fit: contain;
+  outline: 1px solid rgb(0 0 0 / 0.1);
+  outline-offset: -1px;
+}
+.emptyPreview { color: oklch(0.68 0.01 155); }
+.tikzNotice {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: var(--radius-md);
+  color: var(--amber);
+  background: oklch(0.95 0.05 86);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+}

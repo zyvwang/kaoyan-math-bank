@@ -1,0 +1,230 @@
+.workspace {
+  min-width: 0;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.topBar {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--paper);
+}
+.statusCluster,
+.toolbar,
+.exportBlock,
+.compileBlock { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.savePill,
+.notice {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  background: var(--panel);
+  white-space: nowrap;
+}
+.saving { color: var(--amber); }
+.error { color: var(--coral); border-color: oklch(0.79 0.08 35); }
+.ok { color: var(--teal-strong); border-color: oklch(0.79 0.05 170); }
+.info { color: var(--blue); }
+.notice span { max-width: min(44vw, 700px); overflow: hidden; text-overflow: ellipsis; }
+.notice button { padding: 3px 6px; border-radius: var(--radius-sm); color: inherit; background: transparent; font-weight: 700; }
+
+.metaStrip {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.72fr) 1.15fr 1.25fr minmax(116px, 0.72fr);
+  gap: 9px;
+  padding: 13px 18px 9px;
+}
+.metaStrip label,
+.settingsGrid label,
+.exportBlock label {
+  min-width: 0;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+.metaStrip span,
+.settingsGrid span,
+.exportBlock span { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.metaStrip input,
+.metaStrip select,
+.settingsGrid input,
+.exportBlock input,
+.exportBlock select {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+}
+.settingsBand {
+  margin: 0 18px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+.settingsBand summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+  color: var(--teal-strong);
+}
+.settingsGrid { display: grid; grid-template-columns: 150px 150px minmax(260px, 1fr); gap: 9px; padding: 0 12px 12px; }
+.settingsGrid .preambleField { height: auto; align-items: flex-start; padding-block: 8px; }
+.settingsGrid .texPathField { grid-column: 1 / -1; }
+.preambleField textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+}
+
+.editorSurface {
+  min-height: 0;
+  margin: 0 18px 12px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-raised);
+}
+.editorHeader {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 0;
+  border-bottom: 1px solid var(--hairline);
+  background: oklch(0.975 0.01 100);
+}
+.moduleTabs { height: 100%; display: flex; align-items: end; gap: 3px; }
+.moduleTabs button {
+  position: relative;
+  min-width: 112px;
+  min-height: 49px;
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  padding: 6px 18px 8px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  color: var(--muted);
+  background: transparent;
+  text-align: left;
+  transition: transform 150ms var(--ease-out), background-color 150ms ease, color 150ms ease;
+}
+.moduleTabs button span { font-family: "Songti SC", "Noto Serif CJK SC", serif; font-size: 17px; font-weight: 700; }
+.moduleTabs button small { font-size: 11px; }
+.moduleTabs button::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: -1px;
+  height: 3px;
+  transform: scaleX(0);
+  background: var(--teal);
+  transition: transform 150ms var(--ease-out);
+}
+.moduleTabs .activeTab { color: var(--ink); background: var(--panel); }
+.moduleTabs .activeTab::after { transform: scaleX(1); }
+.overviewActive { color: var(--teal-strong); background: var(--teal-soft); border-color: oklch(0.72 0.06 180); }
+.overviewGrid { min-height: 0; overflow: auto; display: grid; gap: 14px; padding: 18px; background: var(--paper); }
+.overviewSection { border: 1px solid var(--hairline); border-radius: var(--radius-md); background: var(--panel); overflow: hidden; }
+.overviewSection > header {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+.overviewSection h2 { margin: 0; font-family: "Songti SC", "Noto Serif CJK SC", serif; font-size: 18px; }
+.overviewSection header span { color: var(--muted); font-size: 11px; }
+.overviewSection header button { min-width: 40px; min-height: 40px; color: var(--teal-strong); background: transparent; }
+
+.exportDock {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 18px;
+  border-top: 1px solid var(--hairline);
+  background: var(--sidebar);
+}
+.compileBlock { flex-wrap: wrap; }
+.logBox {
+  max-width: min(42vw, 680px);
+  max-height: 88px;
+  margin: 0;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: oklch(0.25 0.03 35);
+  color: oklch(0.93 0.035 40);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.exportBlock { justify-content: flex-end; }
+.exportNameField { width: min(30vw, 280px); }
+.exportOrderField { width: 158px; }
+.exportSeedField { width: min(23vw, 220px); }
+.emptyState { grid-row: 2 / 5; display: grid; place-items: center; align-content: center; gap: 12px; color: var(--muted); }
+
+@media (hover: hover) {
+  .moduleTabs button:hover { color: var(--teal-strong); background: oklch(0.95 0.018 165); }
+}
+
+@media (max-width: 1040px) {
+  .metaStrip, .settingsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .preambleField, .texPathField { grid-column: 1 / -1; }
+  .exportDock, .topBar { align-items: stretch; flex-direction: column; }
+  .exportBlock { justify-content: flex-start; flex-wrap: wrap; }
+  .exportNameField { flex: 1 1 240px; }
+}
+
+@media (max-width: 760px) {
+  .workspace { height: auto; min-height: 100vh; overflow: visible; }
+  .metaStrip { grid-template-columns: 1fr; }
+  .settingsGrid { grid-template-columns: 1fr; }
+  .editorSurface { min-height: 680px; margin-inline: 12px; }
+  .moduleTabs { min-width: 0; flex: 1; }
+  .moduleTabs button { min-width: 0; flex: 1; padding-inline: 10px; }
+  .exportDock, .topBar { padding-inline: 12px; }
+  .metaStrip { padding-inline: 12px; }
+  .settingsBand { margin-inline: 12px; }
+  .exportBlock { display: grid; grid-template-columns: 1fr; width: 100%; }
+  .exportBlock label, .exportBlock button { width: 100%; }
+  .notice span { max-width: 60vw; }
+}
+
+@media (max-width: 520px) {
+  .editorHeader { align-items: stretch; flex-direction: column; padding: 8px; }
+  .moduleTabs { width: 100%; }
+  .moduleTabs button span { font-size: 15px; }
+}

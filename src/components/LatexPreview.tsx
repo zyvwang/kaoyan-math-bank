@@ -3,8 +3,17 @@ import { AlertTriangle } from "lucide-react";
 import type { QuestionAsset } from "../../shared/types.js";
 import { ensureMathJax, splitLatexImages } from "../utils/preview.js";
 import { bindWheelScroller } from "../utils/wheel.js";
+import styles from "./LatexPreview.module.css";
 
-export function LatexPreview({ tex, assets }: { tex: string; assets: QuestionAsset[] }) {
+export function LatexPreview({
+  tex,
+  assets,
+  compact = false
+}: {
+  tex: string;
+  assets: QuestionAsset[];
+  compact?: boolean;
+}) {
   const ref = useRef<HTMLDivElement | null>(null);
   const parts = useMemo(() => splitLatexImages(tex, assets), [assets, tex]);
 
@@ -29,24 +38,24 @@ export function LatexPreview({ tex, assets }: { tex: string; assets: QuestionAss
   }, [tex]);
 
   return (
-    <div className="previewPane" ref={ref}>
+    <div className={`${styles.previewPane} ${compact ? styles.compact : ""}`} ref={ref}>
       {parts.length === 0 ? (
-        <span className="emptyPreview">空</span>
+        <span className={styles.emptyPreview}>空</span>
       ) : (
         parts.map((part, index) =>
           part.type === "image" ? (
-            <figure className="previewImage" key={`${part.src}-${index}`}>
+            <figure className={styles.previewImage} key={`${part.src}-${index}`}>
               <img src={part.src} alt={part.alt} />
             </figure>
           ) : (
-            <div className="latexText" key={index}>
+            <div className={styles.latexText} key={index}>
               {part.text}
             </div>
           )
         )
       )}
       {/(\\begin\{tikzpicture}|\\begin\{axis})/.test(tex) && (
-        <div className="tikzNotice">
+        <div className={styles.tikzNotice}>
           <AlertTriangle size={14} />
           TikZ/pgfplots 以真实编译为准
         </div>
