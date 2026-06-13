@@ -82,6 +82,8 @@ Then open the application again.
 6. Click `Check Current Item` to run a real XeLaTeX compile.
 7. Select the questions you need, choose an order, and export the four output files.
 
+<!-- Restart numbering for the Chinese version. -->
+
 1. 启动应用，新建工作区或选择已有工作区文件夹。
 2. 点击 `+` 新建题目。
 3. 按需填写原编号、章节、标签和星级。
@@ -144,14 +146,14 @@ exports/
 - `full.*` contains questions, solutions, and notes.
 - The default name uses `math-YYYY-MM-DD-N`. The number starts at `1` and advances to the next unused sequence in that workspace.
 - A custom export name remains unchanged after export.
-- Normal order follows the list order. Random order stores a seed so the same order can be reproduced.
+- Normal order follows the list order. In random mode, using the same selection and seed reproduces the same shuffled order.
 - After export, choose `Open File Location` to reveal the output folder in Finder, File Explorer, or the Linux file manager.
 
 - `questions.*` 仅包含题目。
 - `full.*` 包含题目、解析和备注。
 - 默认名称采用 `math-YYYY-MM-DD-N`。序号从 `1` 开始，并自动使用当前工作区中的下一个可用序号。
 - 手动修改导出名后，成功导出不会改变该名称。
-- 正常顺序遵循列表顺序；随机顺序会保存种子，便于复现同一排列。
+- 正常顺序遵循列表顺序；随机模式下，相同的勾选范围和种子会复现同一排列。
 - 导出完成后，可点击“打开文件位置”，在 Finder、文件资源管理器或 Linux 文件管理器中定位结果目录。
 
 The four files are first generated in a temporary staging directory. Existing output with the same name is replaced only after both PDFs compile successfully, so a failed export does not destroy the previous successful result.
@@ -173,12 +175,12 @@ workspace/
 └── .history/
 ```
 
-- `bank.json` stores questions, metadata, selection, order, and workspace settings.
+- `bank.json` stores questions, metadata, order, and workspace settings.
 - `assets/` stores uploaded images using generated filenames.
 - `exports/` stores successful export folders.
 - `bank.json.bak` and `.history/` provide recovery points.
 
-- `bank.json` 保存题目、元数据、勾选状态、顺序和工作区设置。
+- `bank.json` 保存题目、元数据、顺序和工作区设置。
 - `assets/` 使用生成的文件名保存上传图片。
 - `exports/` 保存成功导出的目录。
 - `bank.json.bak` 和 `.history/` 提供恢复点。
@@ -206,9 +208,9 @@ npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:61094` for the local web interface.
+Open `http://127.0.0.1:5173` for the local web interface.
 
-打开 `http://127.0.0.1:61094` 使用本机网页界面。
+打开 `http://127.0.0.1:5173` 使用本机网页界面。
 
 Run the Electron development build:
 
