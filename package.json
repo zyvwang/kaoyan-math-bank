@@ -1,6 +1,6 @@
 {
   "name": "kaoyan-math-bank",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A local-first LaTeX question bank for kaoyan math study.",
   "author": "Kaoyan Math Bank contributors",
   "private": true,

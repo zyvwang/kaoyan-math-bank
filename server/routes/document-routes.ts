@@ -3,10 +3,15 @@ import multer from "multer";
 import path from "node:path";
 import {
   validateCompileItemRequest,
-  validateExportRequest
+  validateExportRequest,
+  validateRevealExportRequest
 } from "../../shared/validation.js";
 import { saveQuestionAsset } from "../asset-service.js";
 import { readBankSnapshot } from "../bank-storage.js";
+import {
+  getDefaultExportName,
+  revealCurrentExportDirectory
+} from "../export-directory-service.js";
 import { exportBank } from "../export-service.js";
 import { sendApiError } from "../http/api-response.js";
 import { writeCurrentItemCheck } from "../latex-files.js";
@@ -77,6 +82,28 @@ export function createDocumentRouter(): Router {
         validation.value
       );
       response.status(result.ok ? 200 : 422).json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/exports/default-name", async (_request, response, next) => {
+    try {
+      response.json({ exportName: await getDefaultExportName() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/exports/reveal", async (request, response, next) => {
+    try {
+      const validation = validateRevealExportRequest(request.body);
+      if (!validation.ok || !validation.value) {
+        sendApiError(response, 400, validation.error, "EXPORT_REVEAL_REQUEST_INVALID");
+        return;
+      }
+      await revealCurrentExportDirectory(validation.value.exportName);
+      response.json({ ok: true });
     } catch (error) {
       next(error);
     }

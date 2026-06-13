@@ -32,7 +32,6 @@ export function createApiApp(): express.Express {
   app.use(express.json({ limit: "8mb" }));
   app.use(rejectForeignMutatingOrigins);
   app.use("/assets", dynamicWorkspaceStatic("assetDir"));
-  app.use("/exports", dynamicWorkspaceStatic("exportDir"));
   app.use("/tmp", dynamicWorkspaceStatic("tempDir"));
   app.use("/api", createWorkspaceRouter());
   app.use("/api", createBankRouter());

@@ -69,9 +69,6 @@ export async function exportBank(
     ok,
     exportName: fileName,
     exportPath: ok ? targetDir : stagingDir,
-    exportUrl: ok
-      ? `/exports/${encodeURIComponent(fileName)}/`
-      : toPublicTempUrl(stagingDir, tempDir),
     files,
     results
   };

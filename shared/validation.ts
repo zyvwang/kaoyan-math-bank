@@ -9,6 +9,7 @@ import type {
   ModuleKind,
   QuestionAsset,
   QuestionItem,
+  RevealExportRequest,
   TexPathRequest,
   WorkspaceMoveRequest,
   WorkspacePathRequest
@@ -125,6 +126,14 @@ export function validateExportRequest(value: unknown): ValidationResult<ExportRe
       randomSeed: randomSeed || undefined
     }
   };
+}
+
+export function validateRevealExportRequest(value: unknown): ValidationResult<RevealExportRequest> {
+  if (!isRecord(value)) return invalid("请求体必须是对象。");
+  const exportName = getStringField(value, "exportName");
+  if (exportName === undefined) return invalid("exportName 必须是字符串。");
+  if (!exportName) return invalid("缺少导出名。");
+  return { ok: true, value: { exportName } };
 }
 
 function parseBank(value: unknown): Bank {

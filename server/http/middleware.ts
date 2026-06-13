@@ -55,7 +55,7 @@ export function rejectForeignMutatingOrigins(
 }
 
 export function dynamicWorkspaceStatic(
-  dirKey: "assetDir" | "exportDir" | "tempDir"
+  dirKey: "assetDir" | "tempDir"
 ): express.RequestHandler {
   return async (request, response, next) => {
     try {

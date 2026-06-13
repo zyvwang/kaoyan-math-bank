@@ -87,6 +87,12 @@ export interface CompileExportContextValue {
   isExporting: boolean;
   isCompiling: boolean;
   compileResult: CompileResponse | null;
+  exportFailureResult: CompileResponse | null;
+  compileStatus: {
+    state: "compiling" | "success" | "failure" | "stale";
+    text: string;
+    pdfUrl?: string;
+  } | null;
   setExportName: (value: string) => void;
   setExportOrderMode: (value: ExportOrderMode) => void;
   setRandomSeed: (value: string) => void;
@@ -95,11 +101,8 @@ export interface CompileExportContextValue {
   exportSelected: () => Promise<void>;
 }
 
-export type EditorMode = "focus" | "overview";
-
 export interface WorkspaceUiContextValue {
   activeModule: ModuleKind;
-  editorMode: EditorMode;
   draggingId: string | null;
   dropTarget: { id: string; position: DropPosition } | null;
   reorderMenu: ReorderMenu | null;
@@ -109,7 +112,6 @@ export interface WorkspaceUiContextValue {
   reorderError: string;
   reorderInputRef: RefObject<HTMLInputElement | null>;
   setActiveModule: (kind: ModuleKind) => void;
-  setEditorMode: (mode: EditorMode) => void;
   setReorderTarget: (value: string) => void;
   setReorderError: (value: string) => void;
   openReorderDialog: (id: string) => void;

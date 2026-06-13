@@ -1,5 +1,5 @@
 import { deepStrictEqual, equal, ok } from "node:assert";
-import { mkdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it, beforeEach } from "vitest";
 import {
@@ -30,6 +30,10 @@ import {
 } from "../../server/bank-storage.js";
 import { writeJsonFileAtomic } from "../../server/json-file.js";
 import {
+  nextDefaultExportName,
+  resolveCurrentExportDirectory
+} from "../../server/export-directory-service.js";
+import {
   cleanupOldTempDirs,
   listRecoveryCandidates,
   recoverBank
@@ -46,6 +50,7 @@ import type { QuestionItem } from "../../shared/types.js";
 import { moveItemToPositionInList, reorderItemByDrop } from "../../src/itemOrder.js";
 import { nextWheelScrollState, wheelDeltaToPixels } from "../../src/wheelScroll.js";
 import { validateReorderTarget } from "../../src/questionReorder.js";
+import { compileContentVersion } from "../../src/utils/compileVersion.js";
 
 const fixedNow = "2026-01-01T00:00:00.000Z";
 const workspacePath = path.resolve(".tmp/vitest-unit-workspace");
@@ -169,6 +174,63 @@ describe("domain helpers", () => {
     await writeFile(path.join(targetDir, "ignored.log"), "log", "utf8");
     deepStrictEqual(await listExportFiles(targetDir), ["questions.pdf", "questions.tex"]);
     deepStrictEqual(await listExportFiles(path.join(targetDir, "missing")), []);
+  });
+
+  it("versions only inputs that affect current-item compilation", () => {
+    const bank = createSampleBank();
+    const item = bank.items[0];
+    const initial = compileContentVersion(item, bank.settings);
+
+    equal(
+      compileContentVersion({ ...item, chapter: "changed", tags: ["changed"], star: 5 }, bank.settings),
+      initial
+    );
+    expect(compileContentVersion({ ...item, sourceNumber: "changed" }, bank.settings)).not.toBe(initial);
+    expect(
+      compileContentVersion({
+        ...item,
+        modules: {
+          ...item.modules,
+          question: { tex: `${item.modules.question.tex} changed` }
+        }
+      }, bank.settings)
+    ).not.toBe(initial);
+    expect(
+      compileContentVersion({
+        ...item,
+        assets: [{
+          id: "asset",
+          fileName: "asset.png",
+          originalName: "asset.png",
+          relativePath: "assets/asset.png",
+          mimeType: "image/png",
+          size: 1,
+          uploadedAt: fixedNow
+        }]
+      }, bank.settings)
+    ).not.toBe(initial);
+    expect(
+      compileContentVersion(item, {
+        ...bank.settings,
+        preamble: `${bank.settings.preamble}\n\\usepackage{booktabs}`
+      })
+    ).not.toBe(initial);
+  });
+
+  it("increments default export names from successful directories only", async () => {
+    const exportDir = path.join(workspacePath, "exports");
+    await mkdir(exportDir, { recursive: true });
+    const date = new Date(2026, 5, 13, 23, 30);
+    equal(await nextDefaultExportName(exportDir, date), "math-2026-06-13-1");
+
+    await Promise.all([
+      mkdir(path.join(exportDir, "math-2026-06-13-1")),
+      mkdir(path.join(exportDir, "math-2026-06-13-3")),
+      mkdir(path.join(exportDir, "math-2026-06-13-108")),
+      mkdir(path.join(exportDir, "math-2026-06-12-999")),
+      writeFile(path.join(exportDir, "math-2026-06-13-999"), "not a directory", "utf8")
+    ]);
+    equal(await nextDefaultExportName(exportDir, date), "math-2026-06-13-109");
   });
 });
 
@@ -353,6 +415,38 @@ describe("storage", () => {
     await cleanupOldTempDirs(workspacePath);
     await expect(stat(oldDir)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(recentDir)).resolves.toBeDefined();
+  });
+
+  it("resolves only real direct-child export directories", async () => {
+    await createEmptyWorkspace(workspacePath);
+    const exportDir = path.join(workspacePath, "exports");
+    const validDir = path.join(exportDir, "math-2026-06-13-1");
+    const externalDir = path.join(workspacePathB, "external");
+    await Promise.all([
+      mkdir(validDir, { recursive: true }),
+      mkdir(externalDir, { recursive: true })
+    ]);
+    await symlink(
+      externalDir,
+      path.join(exportDir, "linked"),
+      process.platform === "win32" ? "junction" : "dir"
+    );
+
+    equal(await resolveCurrentExportDirectory("math-2026-06-13-1"), validDir);
+    await expectStorageError(() => resolveCurrentExportDirectory("../external"), "EXPORT_NAME_INVALID");
+    await expectStorageError(() => resolveCurrentExportDirectory("missing"), "EXPORT_DIRECTORY_MISSING");
+    await expectStorageError(() => resolveCurrentExportDirectory("linked"), "EXPORT_DIRECTORY_INVALID");
+
+    await rm(exportDir, { recursive: true, force: true });
+    await symlink(
+      externalDir,
+      exportDir,
+      process.platform === "win32" ? "junction" : "dir"
+    );
+    await expectStorageError(
+      () => resolveCurrentExportDirectory(path.basename(validDir)),
+      "EXPORT_ROOT_INVALID"
+    );
   });
 });
 

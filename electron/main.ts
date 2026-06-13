@@ -139,6 +139,14 @@ function registerIpcHandlers() {
     return shell.openPath(targetPath);
   });
 
+  ipcMain.handle("shell:reveal-export", async (event, exportName: string) => {
+    assertTrustedSender(event);
+    const { resolveCurrentExportDirectory } = await import("../server/export-directory-service.js");
+    const error = await shell.openPath(await resolveCurrentExportDirectory(exportName));
+    if (error) throw new Error(error);
+    return true;
+  });
+
   ipcMain.handle("shell:trash-path", async (event, targetPath: string) => {
     assertTrustedSender(event);
     await assertKnownWorkspacePath(targetPath);

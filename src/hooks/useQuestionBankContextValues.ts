@@ -131,6 +131,8 @@ export function useQuestionBankContextValues(
     isExporting: input.compileExport.isExporting,
     isCompiling: input.compileExport.isCompiling,
     compileResult: input.compileExport.compileResult,
+    exportFailureResult: input.compileExport.exportFailureResult,
+    compileStatus: input.compileExport.compileStatus,
     setExportName: input.compileExport.setExportName,
     setExportOrderMode: input.compileExport.setExportOrderMode,
     setRandomSeed: input.compileExport.setRandomSeed,
@@ -139,7 +141,9 @@ export function useQuestionBankContextValues(
     exportSelected: stable.exportSelected
   }), [
     input.compileExport.compileResult,
+    input.compileExport.compileStatus,
     input.compileExport.exportName,
+    input.compileExport.exportFailureResult,
     input.compileExport.exportOrderMode,
     input.compileExport.isCompiling,
     input.compileExport.isExporting,
@@ -154,9 +158,7 @@ export function useQuestionBankContextValues(
 
   const workspaceUi = useMemo<QuestionBankContextValues["workspaceUi"]>(() => ({
     activeModule: input.activeModule,
-    editorMode: input.editorMode,
     setActiveModule: input.setActiveModule,
-    setEditorMode: input.setEditorMode,
     draggingId: input.reorder.draggingId,
     dropTarget: input.reorder.dropTarget,
     reorderMenu: input.reorder.reorderMenu,
@@ -176,7 +178,6 @@ export function useQuestionBankContextValues(
     startMouseDrag: stable.startMouseDrag
   }), [
     input.activeModule,
-    input.editorMode,
     input.reorder.addMenu,
     input.reorder.draggingId,
     input.reorder.dropTarget,
@@ -188,7 +189,6 @@ export function useQuestionBankContextValues(
     input.reorder.setReorderError,
     input.reorder.setReorderTarget,
     input.setActiveModule,
-    input.setEditorMode,
     stable.closeReorderDialog,
     stable.openAddMenu,
     stable.openReorderDialog,

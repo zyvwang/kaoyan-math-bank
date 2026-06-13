@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../../src/App.js";
@@ -75,8 +75,13 @@ const bank: Bank = {
   ]
 };
 
+let nextExportName = "math-2026-06-13-1";
+let compileResponder: (() => Promise<Response>) | null = null;
+
 beforeEach(() => {
   vi.useRealTimers();
+  nextExportName = "math-2026-06-13-1";
+  compileResponder = null;
   vi.stubGlobal("fetch", vi.fn(handleFetch));
 });
 
@@ -97,7 +102,7 @@ describe("App UI", () => {
     expect(screen.getByText("2024-2")).toBeInTheDocument();
   });
 
-  it("switches focused modules with the keyboard and opens overview mode", async () => {
+  it("switches focused modules with the keyboard without an overview mode", async () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByText("2024-1");
@@ -108,10 +113,63 @@ describe("App UI", () => {
 
     expect(screen.getByRole("tab", { name: /解析/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByLabelText("latex-editor")).toHaveValue("答案。");
+    expect(screen.queryByRole("button", { name: "总览" })).not.toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole("button", { name: "总览" }));
-    expect(screen.getByRole("button", { name: "总览" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getAllByRole("button", { name: "编辑" })).toHaveLength(3);
+  it("binds compile success to the checked item and exact content version", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("2024-1");
+
+    await user.click(screen.getByRole("button", { name: "检查当前题" }));
+    const successText = await screen.findByText("当前题编译通过。");
+    expect(within(successText.parentElement!).getByRole("button", { name: "打开" })).toBeInTheDocument();
+
+    await user.click(screen.getByText("2024-2"));
+    expect(await screen.findByText("编译结果已过期，请重新检查。")).toBeInTheDocument();
+    await user.click(screen.getByText("2024-1"));
+    expect(await screen.findByText("当前题编译通过。")).toBeInTheDocument();
+
+    const editor = screen.getByLabelText("latex-editor");
+    await user.type(editor, "修改");
+    const staleText = await screen.findByText("编译结果已过期，请重新检查。");
+    expect(within(staleText.parentElement!).queryByRole("button", { name: "打开" })).not.toBeInTheDocument();
+  });
+
+  it("marks an in-flight compile stale when content changes", async () => {
+    const user = userEvent.setup();
+    let resolveCompile: ((response: Response) => void) | undefined;
+    compileResponder = () => new Promise<Response>((resolve) => {
+      resolveCompile = resolve;
+    });
+    render(<App />);
+    await screen.findByText("2024-1");
+
+    await user.click(screen.getByRole("button", { name: "检查当前题" }));
+    expect(await screen.findByText("正在编译当前题。")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("latex-editor"), "修改");
+    expect(await screen.findByText("编译内容已变化，完成后结果将过期。")).toBeInTheDocument();
+
+    resolveCompile?.(compileSuccess());
+    expect(await screen.findByText("编译结果已过期，请重新检查。")).toBeInTheDocument();
+  });
+
+  it("hides a compile failure log after switching items", async () => {
+    const user = userEvent.setup();
+    compileResponder = async () => json({
+      ok: false,
+      texPath: "/tmp/current-item.tex",
+      texUrl: "/tmp/current-item.tex",
+      log: "Undefined control sequence"
+    }, 422);
+    render(<App />);
+    await screen.findByText("2024-1");
+
+    await user.click(screen.getByRole("button", { name: "检查当前题" }));
+    expect(await screen.findByText("Undefined control sequence")).toBeInTheDocument();
+    await user.click(screen.getByText("2024-2"));
+    expect(screen.queryByText("Undefined control sequence")).not.toBeInTheDocument();
+    expect(await screen.findByText("编译结果已过期，请重新检查。")).toBeInTheDocument();
   });
 
   it("autosaves metadata edits", async () => {
@@ -167,10 +225,11 @@ describe("App UI", () => {
     expect(await screen.findByText("图片已插入当前模块。")).toBeInTheDocument();
   });
 
-  it("exports the selected items", async () => {
+  it("increments an automatic export name and opens its file location", async () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByText("2024-1");
+    expect(await screen.findByLabelText("导出名")).toHaveValue("math-2026-06-13-1");
 
     await user.click(screen.getByRole("button", { name: /导出 2 题/ }));
 
@@ -183,6 +242,30 @@ describe("App UI", () => {
       );
     });
     expect(await screen.findByText(/导出完成/)).toBeInTheDocument();
+    expect(screen.getByLabelText("导出名")).toHaveValue("math-2026-06-13-2");
+
+    await user.click(screen.getByRole("button", { name: "打开文件位置" }));
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/exports/reveal",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+  });
+
+  it("keeps a manually edited export name after success", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("2024-1");
+    const nameInput = await screen.findByLabelText("导出名");
+    await user.clear(nameInput);
+    await user.type(nameInput, "custom-set");
+
+    await user.click(screen.getByRole("button", { name: /导出 2 题/ }));
+    await screen.findByText(/导出完成/);
+    expect(nameInput).toHaveValue("custom-set");
+    const exportCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url) === "/api/export");
+    expect(JSON.parse(String(exportCall?.[1]?.body))).toMatchObject({ fileName: "custom-set" });
   });
 
   it("saves before switching workspaces", async () => {
@@ -367,12 +450,23 @@ async function handleFetch(input: RequestInfo | URL, init?: RequestInit): Promis
       insertText: "\\includegraphics{assets/asset.png}"
     });
   }
+  if (url === "/api/compile-item") {
+    return compileResponder ? compileResponder() : compileSuccess();
+  }
+  if (url === "/api/exports/default-name") {
+    return json({ exportName: nextExportName });
+  }
+  if (url === "/api/exports/reveal") {
+    return json({ ok: true });
+  }
   if (url === "/api/export") {
+    const request = JSON.parse(String(init?.body)) as { fileName: string };
+    const sequence = /^(math-\d{4}-\d{2}-\d{2})-(\d+)$/.exec(request.fileName);
+    if (sequence) nextExportName = `${sequence[1]}-${Number(sequence[2]) + 1}`;
     return json({
       ok: true,
-      exportName: "math-test",
-      exportPath: "/tmp/math-bank/exports/math-test",
-      exportUrl: "/exports/math-test/",
+      exportName: request.fileName,
+      exportPath: `/tmp/math-bank/exports/${request.fileName}`,
       files: ["questions.tex", "questions.pdf", "full.tex", "full.pdf"],
       results: {
         questions: { ok: true, texPath: "questions.tex", pdfPath: "questions.pdf", log: "" },
@@ -381,6 +475,17 @@ async function handleFetch(input: RequestInfo | URL, init?: RequestInit): Promis
     });
   }
   return json({ error: `Unhandled ${url}` }, 404);
+}
+
+function compileSuccess(): Response {
+  return json({
+    ok: true,
+    texPath: "/tmp/current-item.tex",
+    pdfPath: "/tmp/current-item.pdf",
+    texUrl: "/tmp/current-item.tex",
+    pdfUrl: "/tmp/current-item.pdf",
+    log: ""
+  });
 }
 
 function json(value: unknown, status = 200): Response {

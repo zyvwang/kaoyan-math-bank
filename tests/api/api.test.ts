@@ -197,6 +197,28 @@ describe("API validation", () => {
     expect(exportResponse.body.results.full.texUrl).toMatch(/^\/tmp\/export-[^/]+\/full\.tex$/);
     expect(await readFile(path.join(existingDir, "previous.pdf"), "utf8")).toBe("previous");
   });
+
+  it("serves the next export name and rejects unsafe reveal requests", async () => {
+    const app = createApiApp();
+    await request(app).post("/api/workspaces/create-empty").send({ workspacePath }).expect(200);
+    await Promise.all([
+      mkdir(path.join(workspacePath, "exports", "math-2026-06-13-1")),
+      mkdir(path.join(workspacePath, "exports", "math-2026-06-13-3"))
+    ]);
+
+    const response = await request(app).get("/api/exports/default-name").expect(200);
+    expect(response.body.exportName).toMatch(/^math-\d{4}-\d{2}-\d{2}-\d+$/);
+    await request(app)
+      .post("/api/exports/reveal")
+      .send({ exportName: "../outside" })
+      .expect(400)
+      .expect(({ body }) => expect(body.code).toBe("EXPORT_NAME_INVALID"));
+    await request(app)
+      .post("/api/exports/reveal")
+      .send({ exportName: "missing" })
+      .expect(400)
+      .expect(({ body }) => expect(body.code).toBe("EXPORT_DIRECTORY_MISSING"));
+  });
 });
 
 function createLegacyBank() {

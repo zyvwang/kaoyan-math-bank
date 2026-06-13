@@ -4,6 +4,7 @@ import type {
   Bank,
   BankSnapshot,
   CompileResponse,
+  ExportDefaultNameResponse,
   ExportOrderMode,
   ExportResponse,
   ModuleKind,
@@ -112,6 +113,15 @@ export async function exportItems(input: {
     body: JSON.stringify(input)
   });
   return readJsonResponse<ExportResponse>(response, { allowErrorPayload: true });
+}
+
+export async function fetchDefaultExportName(): Promise<string> {
+  const data = await fetchJson<ExportDefaultNameResponse>("/api/exports/default-name");
+  return data.exportName;
+}
+
+export async function revealExportFolder(exportName: string): Promise<void> {
+  await postJson<{ ok: true }>("/api/exports/reveal", { exportName });
 }
 
 async function fetchJson<T>(url: string): Promise<T> {

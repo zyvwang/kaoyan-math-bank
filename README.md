@@ -119,7 +119,7 @@ My Bank/
   bank.json
   assets/
   exports/
-    math-2026-06-08/
+    math-2026-06-08-1/
       questions.tex
       questions.pdf
       full.tex
@@ -130,6 +130,10 @@ My Bank/
 `questions.*` contains only the question modules. `full.*` contains question, solution, and note modules.
 
 `questions.*` 只包含题目模块。`full.*` 包含题目、解析、备注三个模块。
+
+The default export name uses the local date plus the next available sequence number. After a successful export, `math-2026-06-08-1` advances to `math-2026-06-08-2`. A manually edited name is kept unchanged.
+
+默认导出名由本机日期和当前工作区的下一个可用序号组成。成功导出 `math-2026-06-08-1` 后会自动变为 `math-2026-06-08-2`；手动修改的名称则保持不变。
 
 Exports are compiled in a temporary staging directory. The final export folder is replaced only after both PDFs compile successfully, so a failed replacement does not destroy the previous successful export. Failed staging directories keep their `.tex` files and logs for diagnosis and are cleaned after seven days.
 

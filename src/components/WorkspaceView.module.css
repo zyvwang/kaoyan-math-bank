@@ -153,21 +153,6 @@
 }
 .moduleTabs .activeTab { color: var(--ink); background: var(--panel); }
 .moduleTabs .activeTab::after { transform: scaleX(1); }
-.overviewActive { color: var(--teal-strong); background: var(--teal-soft); border-color: oklch(0.72 0.06 180); }
-.overviewGrid { min-height: 0; overflow: auto; display: grid; gap: 14px; padding: 18px; background: var(--paper); }
-.overviewSection { border: 1px solid var(--hairline); border-radius: var(--radius-md); background: var(--panel); overflow: hidden; }
-.overviewSection > header {
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--hairline);
-}
-.overviewSection h2 { margin: 0; font-family: "Songti SC", "Noto Serif CJK SC", serif; font-size: 18px; }
-.overviewSection header span { color: var(--muted); font-size: 11px; }
-.overviewSection header button { min-width: 40px; min-height: 40px; color: var(--teal-strong); background: transparent; }
-
 .exportDock {
   display: flex;
   align-items: flex-end;

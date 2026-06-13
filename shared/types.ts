@@ -103,12 +103,19 @@ export interface ExportResponse {
   ok: boolean;
   exportName: string;
   exportPath: string;
-  exportUrl: string;
   files: string[];
   results: {
     questions: CompileResponse;
     full: CompileResponse;
   };
+}
+
+export interface ExportDefaultNameResponse {
+  exportName: string;
+}
+
+export interface RevealExportRequest {
+  exportName: string;
 }
 
 export interface RecoveryCandidate {

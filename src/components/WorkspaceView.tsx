@@ -9,10 +9,13 @@ import {
   Trash2
 } from "lucide-react";
 import {
+  useCompileExport,
   useLifecycle,
   useQuestions,
   useWorkspaceUi
 } from "../context/questionBankContexts.js";
+import { revealExportFolder } from "../api/client.js";
+import type { NoticeAction } from "../hooks/controllerTypes.js";
 import controls from "../styles/controls.module.css";
 import { WorkspaceDetails } from "./WorkspaceDetails.js";
 import { WorkspaceEditorSurface } from "./WorkspaceEditorSurface.js";
@@ -31,8 +34,27 @@ export function WorkspaceView() {
 }
 
 function TopBar() {
+  const compileExport = useCompileExport();
   const lifecycle = useLifecycle();
   const questions = useQuestions();
+
+  async function runNoticeAction(action: NoticeAction) {
+    try {
+      if (action.type === "open-url") {
+        openUrl(action.href);
+      } else if (window.kmb?.revealExportFolder) {
+        await window.kmb.revealExportFolder(action.exportName);
+      } else {
+        await revealExportFolder(action.exportName);
+      }
+    } catch (error) {
+      lifecycle.setNotice({
+        type: "error",
+        text: error instanceof Error ? error.message : "无法打开导出文件位置。"
+      });
+    }
+  }
+
   return (
     <header className={styles.topBar}>
       <div className={styles.statusCluster}>
@@ -42,6 +64,27 @@ function TopBar() {
           {lifecycle.saveState === "saving" ? "保存中" :
             lifecycle.saveState === "error" ? "保存失败" : "已保存"}
         </span>
+        {compileExport.compileStatus && (
+          <div
+            className={`${styles.notice} ${
+              styles[compileStatusTone(compileExport.compileStatus.state)]
+            }`}
+            role="status"
+          >
+            {compileExport.compileStatus.state === "success"
+              ? <Check size={15} />
+              : <AlertTriangle size={15} />}
+            <span>{compileExport.compileStatus.text}</span>
+            {compileExport.compileStatus.pdfUrl && (
+              <button
+                type="button"
+                onClick={() => openUrl(compileExport.compileStatus!.pdfUrl!)}
+              >
+                打开
+              </button>
+            )}
+          </div>
+        )}
         {lifecycle.notice && (
           <div className={`${styles.notice} ${styles[lifecycle.notice.type]}`} role="status">
             {lifecycle.notice.type === "error" ? <AlertTriangle size={15} /> : <Check size={15} />}
@@ -52,8 +95,13 @@ function TopBar() {
             {questions.canUndoDelete && (
               <button type="button" onClick={questions.undoDelete}>撤销</button>
             )}
-            {lifecycle.notice.href && (
-              <button type="button" onClick={() => openNotice(lifecycle.notice!.href!)}>打开</button>
+            {lifecycle.notice.action && (
+              <button
+                type="button"
+                onClick={() => void runNoticeAction(lifecycle.notice!.action!)}
+              >
+                {lifecycle.notice.action.label ?? "打开"}
+              </button>
             )}
           </div>
         )}
@@ -123,7 +171,13 @@ function EmptyWorkspace() {
   );
 }
 
-function openNotice(href: string) {
+function compileStatusTone(state: "compiling" | "success" | "failure" | "stale") {
+  if (state === "success") return "ok";
+  if (state === "compiling") return "info";
+  return "error";
+}
+
+function openUrl(href: string) {
   const url = new URL(href, window.location.href).href;
   if (window.kmb?.openExternal) void window.kmb.openExternal(url);
   else window.open(url, "_blank", "noopener,noreferrer");

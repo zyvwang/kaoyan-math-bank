@@ -32,9 +32,11 @@ describe("Electron shell path allowlist", () => {
     expect(mainSource).toContain("sandbox: true");
     expect(mainSource).toContain("setWindowOpenHandler");
     expect(mainSource).toContain("assertTrustedSender");
+    expect(mainSource).toContain('ipcMain.handle("shell:reveal-export"');
     expect(mainSource).toContain('ipcMain.on("app:close-response"');
     expect(mainSource).toContain("quitRequested = true");
     expect(preloadSource).toContain('contextBridge.exposeInMainWorld("kmb"');
+    expect(preloadSource).toContain("revealExportFolder");
     expect(preloadSource).not.toContain("ipcRenderer:");
   });
 

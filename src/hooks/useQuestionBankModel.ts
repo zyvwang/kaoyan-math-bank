@@ -12,7 +12,7 @@ import type {
   ModuleKind,
   QuestionItem
 } from "../../shared/types.js";
-import type { EditorMode, QuestionBankContextValues } from "../context/questionBankContextTypes.js";
+import type { QuestionBankContextValues } from "../context/questionBankContextTypes.js";
 import { useAutosave } from "./useAutosave.js";
 import { useCompileExportActions } from "./useCompileExportActions.js";
 import { useQuestionDerivedData } from "./useQuestionDerivedData.js";
@@ -31,7 +31,6 @@ export function useQuestionBankModel(): QuestionBankContextValues {
     QuestionBankContextValues["lifecycle"]["recoveryCandidates"]
   >([]);
   const [activeModule, setActiveModule] = useState<ModuleKind>("question");
-  const [editorMode, setEditorMode] = useState<EditorMode>("focus");
   const selection = useSelectionFilters();
   const filters = useMemo(
     () => ({
@@ -69,13 +68,14 @@ export function useQuestionBankModel(): QuestionBankContextValues {
   const compileExport = useCompileExportActions({
     activeItem: derived.activeItem,
     bank,
+    workspacePath: appInfo?.currentWorkspacePath ?? "",
     selectedIds: selection.selectedIds,
     persistBank,
     setNotice,
     updateItem
   });
   const { clearFilters, selectAllItems } = selection;
-  const { setCompileResult } = compileExport;
+  const { resetCompileState } = compileExport;
 
   const applyBankSnapshot = useCallback(
     (nextAppInfo: AppInfo, snapshot: BankSnapshot) => {
@@ -85,13 +85,12 @@ export function useQuestionBankModel(): QuestionBankContextValues {
       setActiveId(snapshot.bank.items[0]?.id ?? null);
       selectAllItems(snapshot.bank.items);
       clearFilters();
-      setCompileResult(null);
+      resetCompileState();
       setLoadError(null);
       setRecoveryCandidates([]);
       setActiveModule("question");
-      setEditorMode("focus");
     },
-    [clearFilters, resetAutosave, selectAllItems, setCompileResult]
+    [clearFilters, resetAutosave, resetCompileState, selectAllItems]
   );
   const reloadWorkspace = useCallback(
     async (nextAppInfo: AppInfo) => {
@@ -164,7 +163,6 @@ export function useQuestionBankModel(): QuestionBankContextValues {
     recoveryCandidates,
     saveState,
     activeModule,
-    editorMode,
     derived,
     selection,
     compileExport,
@@ -173,7 +171,6 @@ export function useQuestionBankModel(): QuestionBankContextValues {
     setActiveId,
     setNotice,
     setActiveModule,
-    setEditorMode,
     updateBank,
     updateItem,
     retrySave,

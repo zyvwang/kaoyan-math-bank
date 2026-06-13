@@ -26,6 +26,9 @@ export function WorkspaceExportDock() {
         {compileExport.compileResult && !compileExport.compileResult.ok && (
           <pre className={styles.logBox}>{compileExport.compileResult.log}</pre>
         )}
+        {compileExport.exportFailureResult && (
+          <pre className={styles.logBox}>{compileExport.exportFailureResult.log}</pre>
+        )}
       </div>
       <div className={styles.exportBlock}>
         <label className={styles.exportNameField}>

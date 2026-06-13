@@ -6,6 +6,7 @@ declare global {
       platform: string;
       selectWorkspaceDirectory: (title?: string) => Promise<string | null>;
       openPath: (targetPath: string) => Promise<string>;
+      revealExportFolder: (exportName: string) => Promise<boolean>;
       trashPath: (targetPath: string) => Promise<boolean>;
       openExternal: (targetUrl: string) => Promise<boolean>;
       onBeforeClose: (listener: () => Promise<void>) => () => void;
