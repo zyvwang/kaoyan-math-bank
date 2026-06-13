@@ -1,325 +1,281 @@
 # Kaoyan Math Bank
 
-Kaoyan Math Bank is a local desktop question bank for organizing Chinese postgraduate math practice. It keeps the data in ordinary folders on your own machine, and each item is split into three LaTeX snippets: question, solution, and notes. You can edit, preview, reorder, select, and export them without turning every small note into a full LaTeX document.
+A local-first desktop question bank for writing, previewing, checking, organizing, and exporting postgraduate mathematics problems in LaTeX.
 
-Kaoyan Math Bank 是一个本地桌面题库，用来整理考研数学刷题时积累的题目、解析和备注。数据保存在你自己电脑上的普通文件夹里，每道题分成题目、解析、备注三个 LaTeX 正文片段，编辑时可以实时预览，整理好之后也可以直接导出 `.tex` 和 `.pdf`。
+一个本地优先的考研数学题库桌面应用，用于编写、预览、检查、整理和导出 LaTeX 题目。
 
-![Main workspace](docs/screenshots/main.png)
-
-![First launch setup](docs/screenshots/setup.png)
+![Main editor](docs/screenshots/main.png)
 
 ## Features / 功能
 
-- Write question, solution, and note content as LaTeX body snippets, while shared packages and macros stay in one global preamble.
-- Preview text, formulas, and uploaded images while editing. When the preview is not enough, use “检查当前题” to run a real XeLaTeX compile.
-- Select any set of items and export either questions only or the full question-solution-note version as both `.tex` and `.pdf`.
-- Export in the current order, or shuffle with a seed so the same random order can be reproduced later.
-- Reorder items by dragging, by arrow buttons, or by moving one item directly to item `N`.
-- Use multiple local workspaces. Each workspace has its own `bank.json`, images, temporary compile files, and exports.
-- Create, open, reveal, reorder, and delete workspaces from the sidebar.
-- Saves are serialized and revision-checked, and switching, exporting, or closing the desktop app waits for pending edits.
-- Recover a damaged `bank.json` from its immediate backup or a recent session history snapshot.
+- Write each item in three independent LaTeX modules: question, solution, and note.
+- Preview formulas instantly with MathJax and attach PNG or JPEG images.
+- Run a real XeLaTeX check for the current item. Results are bound to the item and its content version, so editing or switching items cannot leave a misleading success state.
+- Organize questions with source IDs, chapters, tags, stars, search, filters, selection, and drag-and-drop ordering.
+- Export the selected questions as `questions.tex`, `questions.pdf`, `full.tex`, and `full.pdf`.
+- Use normal order or reproducible random order with a saved seed.
+- Manage multiple local workspaces without uploading question content to a server.
+- Rely on automatic saving, atomic file replacement, backups, and history snapshots for recovery.
 
-- 题目、解析、备注只写 LaTeX 正文片段，公共宏包和宏命令统一放在全局导言区。
-- 编辑时能预览文字、公式和上传图片；遇到实时预览覆盖不了的内容，可以用“检查当前题”跑一次真实 XeLaTeX 编译。
-- 勾选任意题目后，可以导出“仅题目版”和“题目、解析、备注完整版”，并同时得到 `.tex` 和 `.pdf`。
-- 导出时可以按当前顺序，也可以用种子生成可复现的随机顺序。
-- 题序可以拖拽调整，也可以用上下按钮，或者直接把某一题移动到第 `N` 题。
-- 支持多个本地工作区。每个工作区单独保存 `bank.json`、图片、临时编译文件和导出文件。
-- 侧栏里可以新建、打开、显示、排序和删除工作区。
-- 保存请求会串行执行并校验磁盘版本；切换工作区、导出和关闭桌面应用前都会等待未完成编辑落盘。
-- `bank.json` 损坏时，可以从即时备份或最近的会话历史快照恢复。
+- 每道题分为题目、解析、备注三个独立的 LaTeX 模块。
+- 使用 MathJax 即时预览公式，并可插入 PNG 或 JPEG 图片。
+- 对当前题执行真实的 XeLaTeX 检查。检查结果与题目及内容版本绑定，编辑内容或切换题目后不会继续显示误导性的成功状态。
+- 使用原编号、章节、标签、星级、搜索、筛选、勾选和拖拽排序管理题目。
+- 将已选题目导出为 `questions.tex`、`questions.pdf`、`full.tex` 和 `full.pdf`。
+- 支持正常顺序和带种子的可复现随机顺序。
+- 管理多个本地工作区，题目内容不会上传到服务器。
+- 通过自动保存、原子写入、备份和历史快照保护数据。
 
-## Requirements / 依赖
+## Requirements / 环境要求
 
-PDF export uses your own TeX installation. The app does not bundle TeX, mainly because TeX distributions are large and very different across systems.
+The application does not bundle a TeX distribution. Install one before using compile checks or PDF export.
 
-PDF 导出依赖你电脑上的 TeX 环境。软件本身不内置 TeX，主要是因为 TeX 发行版体积很大，而且不同系统的维护方式差别不小。
+应用不内置 TeX 发行版。使用编译检查或 PDF 导出前，请先安装 TeX。
 
-- macOS: install [MacTeX](https://www.tug.org/mactex/), or another TeX Live setup that provides `latexmk` and `xelatex`.
-- Windows: install [TeX Live](https://www.tug.org/texlive/) or [MiKTeX](https://miktex.org/) with `latexmk` and `xelatex`.
-- Linux: install TeX Live packages that provide `latexmk`, `xelatex`, `ctex`, `amsmath`, `mathtools`, `tikz`, and `pgfplots`.
+| Platform | Recommended TeX distribution | Required commands |
+| --- | --- | --- |
+| macOS | MacTeX or BasicTeX | `latexmk`, `xelatex` |
+| Windows | MiKTeX or TeX Live | `latexmk.exe`, `xelatex.exe` |
+| Linux | TeX Live | `latexmk`, `xelatex` |
 
-Kaoyan Math Bank tries to find `latexmk` from `PATH` and common install locations. If it cannot find TeX automatically, open the global LaTeX panel and set the `latexmk` path by hand.
+After installation, confirm that XeLaTeX is available:
 
-软件会从 `PATH` 和常见安装位置自动寻找 `latexmk`。如果没有识别出来，可以打开“全局 LaTeX”面板，手动填写 `latexmk` 的路径。
+安装完成后，确认 XeLaTeX 可用：
+
+```bash
+latexmk --version
+xelatex --version
+```
+
+The application checks `PATH` and common installation locations automatically. If TeX is installed elsewhere, set the `latexmk` path in `Global LaTeX`.
+
+应用会自动检查 `PATH` 和常见安装位置。若 TeX 安装在其他位置，可在“全局 LaTeX”中填写 `latexmk` 路径。
 
 ## Install / 安装
 
-When release files are available, download the installer from GitHub Releases:
+Download the installer for your platform from [GitHub Releases](https://github.com/zyvwang/kaoyan-math-bank/releases):
 
-发布安装包后，可以在 GitHub Releases 下载：
+从 [GitHub Releases](https://github.com/zyvwang/kaoyan-math-bank/releases) 下载对应平台的安装包：
 
 - macOS: `.dmg`
-- Windows: NSIS `.exe`
+- Windows: `.exe`
 
-Early builds may be unsigned. macOS and Windows can therefore show security prompts when you open the app. That is normal for an early open-source project without paid code-signing certificates.
+The installers are currently unsigned and not notarized. On macOS, if Finder reports that the application is damaged, install it in `/Applications` and run:
 
-早期安装包可能没有签名，所以 macOS 和 Windows 打开时可能会出现安全提示。这是早期开源项目没有付费签名证书时常见的情况。
+当前安装包尚未签名或公证。若 macOS 提示应用已损坏，请先将其安装到 `/Applications`，再运行：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Kaoyan Math Bank.app"
+```
+
+Then open the application again.
+
+随后重新打开应用。
 
 ## Quick Start / 快速上手
 
-1. Install a TeX distribution first.
-2. Open Kaoyan Math Bank.
-3. On first launch, choose where to create the sample workspace, or open an existing workspace.
-4. Add or edit items from the left sidebar.
-5. Write LaTeX snippets in the question, solution, and note editors.
-6. Click “检查当前题” when you want to verify that the current item can really compile.
-7. Select the items you need, choose the export name and order, then export from the bottom-right corner.
+1. Launch the application and create a workspace or choose an existing workspace folder.
+2. Click `+` to create a question.
+3. Fill in the source ID, chapter, tags, and star rating as needed.
+4. Write the question, solution, and note in their corresponding tabs.
+5. Add shared packages, commands, or document settings in `Global LaTeX`.
+6. Click `Check Current Item` to run a real XeLaTeX compile.
+7. Select the questions you need, choose an order, and export the four output files.
 
-1. 先安装 TeX 发行版。
-2. 打开 Kaoyan Math Bank。
-3. 首次启动时，选择示例工作区放在哪里，或者直接打开已有工作区。
-4. 在左侧列表新增或编辑题目。
-5. 在题目、解析、备注编辑器中写 LaTeX 正文片段。
-6. 需要确认当前题能否真实编译时，点击“检查当前题”。
-7. 勾选要导出的题目，设置导出名和导出顺序，然后从右下角导出。
+1. 启动应用，新建工作区或选择已有工作区文件夹。
+2. 点击 `+` 新建题目。
+3. 按需填写原编号、章节、标签和星级。
+4. 在对应标签页中编写题目、解析和备注。
+5. 在“全局 LaTeX”中添加共享宏包、命令或文档设置。
+6. 点击“检查当前题”，执行真实的 XeLaTeX 编译。
+7. 勾选需要的题目，选择顺序并导出四个结果文件。
 
-## LaTeX Input Contract / LaTeX 输入规范
+![Workspace setup](docs/screenshots/setup.png)
 
-Each editor should contain body content only. In other words, write the part that would normally go inside `\begin{document}` and `\end{document}`, not the whole document.
+## Writing LaTeX / 编写 LaTeX
 
-每个编辑器里只写正文内容。换句话说，写正常 LaTeX 文档中放在 `\begin{document}` 和 `\end{document}` 之间的部分，不要把整份文档塞进某一道题。
+Write body fragments rather than complete documents. The application supplies the document shell during compile checks and export.
 
-Good:
+请输入正文片段，不要编写完整文档。编译检查和导出时，应用会自动补齐文档结构。
 
 ```tex
-求极限 $\displaystyle \lim_{x\to 0}\frac{\sin x}{x}$。
+已知函数 $f(x)=x^2$，求 $f'(x)$。
+```
 
+For display mathematics:
+
+行间公式示例：
+
+```tex
 \[
-\lim_{x\to 0}\frac{\sin x}{x}=1.
+\int_0^1 x^2\,dx=\frac{1}{3}.
 \]
 ```
 
-Avoid:
+Use `Global LaTeX` for shared packages and commands:
+
+共享宏包和命令请写入“全局 LaTeX”：
 
 ```tex
-\documentclass{article}
-\begin{document}
-...
-\end{document}
+\usepackage{amssymb}
+\newcommand{\R}{\mathbb{R}}
 ```
 
-Put shared packages and macros in the global LaTeX preamble. During export, the app wraps selected snippets into `ctexart` documents and compiles them with `latexmk -xelatex`.
+The live preview is designed for fast editing. `Check Current Item` and export use the installed XeLaTeX engine and are the authoritative checks for the generated document.
 
-公共宏包和宏命令放到“全局 LaTeX”的导言区。导出时，软件会把勾选题目的正文片段统一包装成 `ctexart` 文档，再通过 `latexmk -xelatex` 编译。
-
-TikZ and pgfplots snippets are supported in final PDF compilation. The live preview focuses on MathJax-renderable formulas, so diagrams and package-heavy snippets should still be checked with real compilation.
-
-TikZ 和 pgfplots 片段可以在最终 PDF 编译中使用。实时预览主要覆盖 MathJax 能渲染的公式，图形和依赖宏包较多的内容仍建议用真实编译确认。
+即时预览用于快速编辑；“检查当前题”和导出使用本机安装的 XeLaTeX，最终结果以真实编译为准。
 
 ## Export / 导出
 
-Selected items export to a folder under the current workspace:
+Each successful export creates a folder under the current workspace:
 
-勾选题目会导出到当前工作区的 `exports/` 下面：
-
-```text
-My Bank/
-  bank.json
-  assets/
-  exports/
-    math-2026-06-08-1/
-      questions.tex
-      questions.pdf
-      full.tex
-      full.pdf
-  .tmp/
-```
-
-`questions.*` contains only the question modules. `full.*` contains question, solution, and note modules.
-
-`questions.*` 只包含题目模块。`full.*` 包含题目、解析、备注三个模块。
-
-The default export name uses the local date plus the next available sequence number. After a successful export, `math-2026-06-08-1` advances to `math-2026-06-08-2`. A manually edited name is kept unchanged.
-
-默认导出名由本机日期和当前工作区的下一个可用序号组成。成功导出 `math-2026-06-08-1` 后会自动变为 `math-2026-06-08-2`；手动修改的名称则保持不变。
-
-Exports are compiled in a temporary staging directory. The final export folder is replaced only after both PDFs compile successfully, so a failed replacement does not destroy the previous successful export. Failed staging directories keep their `.tex` files and logs for diagnosis and are cleaned after seven days.
-
-导出会先在临时目录中完成素材复制和编译，两个 PDF 都成功后才替换最终目录。因此同名导出失败时，旧的成功版本不会被破坏。失败目录会保留 `.tex` 和日志用于排查，并在七天后清理。
-
-When you export with a random seed, the same seed and selection produce the same shuffled order. Exported items are numbered from `1` in the exported order, while the original source number is kept when the item has one.
-
-使用随机种子导出时，同一组题目和同一个种子会得到同样的乱序结果。导出文件会按导出顺序从 `1` 重新编号，同时尽量保留题目原本的编号或来源信息。
-
-## Workspace Data / 工作区数据
-
-A workspace is just a normal folder:
-
-工作区就是一个普通文件夹：
+每次成功导出都会在当前工作区中生成一个目录：
 
 ```text
-My Bank/
-  bank.json       # question data / 题库数据
-  assets/         # uploaded images / 上传图片
-  exports/        # exported tex/pdf files / 导出文件
-  .tmp/           # temporary compile files / 临时编译文件
-  .history/       # recent session snapshots / 最近会话快照
-  bank.json.bak   # previous atomic save / 上一次原子保存备份
+exports/
+└── math-2026-06-13-1/
+    ├── questions.tex
+    ├── questions.pdf
+    ├── full.tex
+    └── full.pdf
 ```
 
-This layout makes the data easy to back up, move, or manage with your own sync tool. If you like version control, you can also put a personal workspace under Git. The app itself stores recent workspace paths and the optional TeX path override in `app-state.json` inside the application data directory.
+- `questions.*` contains question statements only.
+- `full.*` contains questions, solutions, and notes.
+- The default name uses `math-YYYY-MM-DD-N`. The number starts at `1` and advances to the next unused sequence in that workspace.
+- A custom export name remains unchanged after export.
+- Normal order follows the list order. Random order stores a seed so the same order can be reproduced.
+- After export, choose `Open File Location` to reveal the output folder in Finder, File Explorer, or the Linux file manager.
 
-这种结构比较方便备份、迁移，也可以放进你自己的同步盘。如果你习惯用 Git 管理个人资料，也可以把自己的工作区单独纳入版本控制。软件本身会在应用数据目录里的 `app-state.json` 中记录最近工作区和可选的 TeX 路径覆盖。
+- `questions.*` 仅包含题目。
+- `full.*` 包含题目、解析和备注。
+- 默认名称采用 `math-YYYY-MM-DD-N`。序号从 `1` 开始，并自动使用当前工作区中的下一个可用序号。
+- 手动修改导出名后，成功导出不会改变该名称。
+- 正常顺序遵循列表顺序；随机顺序会保存种子，便于复现同一排列。
+- 导出完成后，可点击“打开文件位置”，在 Finder、文件资源管理器或 Linux 文件管理器中定位结果目录。
 
-Current workspaces use `bank.json` schema `version: 2`, where the question, solution, and note snippets live under `modules.question.tex`, `modules.solution.tex`, and `modules.note.tex`. Older `version: 1` workspaces with `questionTex`, `solutionTex`, and `noteTex` are still readable and are normalized in memory. To rewrite an older workspace explicitly while keeping a `.bak` backup, run:
+The four files are first generated in a temporary staging directory. Existing output with the same name is replaced only after both PDFs compile successfully, so a failed export does not destroy the previous successful result.
 
-当前工作区使用 `bank.json` 的 `version: 2` 结构，题目、解析、备注分别保存在 `modules.question.tex`、`modules.solution.tex`、`modules.note.tex`。旧版 `version: 1` 工作区中的 `questionTex`、`solutionTex`、`noteTex` 仍然可以读取，并会在内存中归一化。若要显式把旧工作区写成新版并保留 `.bak` 备份，可以运行：
+四个文件会先在临时目录中生成。只有两个 PDF 都编译成功后，同名旧结果才会被替换，因此导出失败不会破坏此前成功的结果。
 
-```bash
-npm run migrate:v2 -- "/path/to/workspace"
+## Workspace and Data / 工作区与数据
+
+A workspace is a normal folder that you control:
+
+工作区是由你自行管理的普通文件夹：
+
+```text
+workspace/
+├── bank.json
+├── bank.json.bak
+├── assets/
+├── exports/
+└── .history/
 ```
 
-Preview the migration without writing:
+- `bank.json` stores questions, metadata, selection, order, and workspace settings.
+- `assets/` stores uploaded images using generated filenames.
+- `exports/` stores successful export folders.
+- `bank.json.bak` and `.history/` provide recovery points.
 
-只预览迁移结果、不写入文件：
+- `bank.json` 保存题目、元数据、勾选状态、顺序和工作区设置。
+- `assets/` 使用生成的文件名保存上传图片。
+- `exports/` 保存成功导出的目录。
+- `bank.json.bak` 和 `.history/` 提供恢复点。
 
-```bash
-npm run migrate:v2 -- "/path/to/workspace" --dry-run
-```
+Edits are saved automatically. Writes use revision checks and atomic replacement to reduce the risk of conflicting or partial saves. When recovery data is available, the application can restore a recent valid snapshot.
 
-Workspace actions are intentionally explicit. The first sample workspace is not created silently; the app asks you where to put it. Later, the sidebar lets you create or open workspaces, move recent workspaces up and down, reveal a workspace in Finder or File Explorer, and delete one after confirmation. “Create” makes a new workspace folder with `bank.json`, `assets/`, `exports/`, and `.tmp/`; “Open” expects an existing workspace folder that already contains `bank.json`. In the desktop app, deleting a workspace moves the folder to the system Trash or Recycle Bin.
+编辑内容会自动保存。写入过程使用版本检查和原子替换，降低冲突写入或文件不完整的风险；发现可用恢复数据时，应用可以恢复最近的有效快照。
 
-工作区操作会尽量让用户知道自己在改哪里。第一次创建示例工作区时，软件不会偷偷选位置，而是会先询问你放在哪里。之后可以在侧栏中新建或打开工作区，对最近工作区上下排序，在 Finder 或文件管理器中显示工作区，也可以确认后删除工作区。“新建”会创建一个包含 `bank.json`、`assets/`、`exports/`、`.tmp/` 的新工作区；“打开”用于选择已经包含 `bank.json` 的已有工作区。桌面版删除工作区时，会把文件夹移入系统废纸篓或回收站。
+Question content stays inside the workspace. The application only stores lightweight preferences, such as recently opened workspace paths and a custom TeX executable path, in its local application data.
 
-Missing recent-workspace paths are never recreated automatically. The sidebar marks them as missing and lets you relocate or remove the entry. If startup cannot read `bank.json`, the recovery screen shows the concrete error and offers valid `bank.json.bak` and `.history/` candidates returned by the local server.
+题目内容始终保存在工作区内。应用只会在本地应用数据中记录最近打开的工作区路径、自定义 TeX 可执行文件路径等轻量设置。
 
-最近工作区路径失效时，软件绝不会自动在原位置新建空题库。侧栏会标记路径缺失，并提供重新定位或移除入口。若启动时无法读取 `bank.json`，恢复页面会显示具体错误，并列出由本地服务校验过的 `bank.json.bak` 与 `.history/` 候选。
+The application does not provide cloud synchronization. To synchronize a workspace, place the folder in a storage system you trust and avoid editing the same workspace on multiple machines at the same time.
 
-To migrate an older prototype project that stores its bank at `data/bank.json`, run:
-
-如果要迁移旧原型项目中位于 `data/bank.json` 的题库，可以运行：
-
-```bash
-npm run migrate:legacy -- /path/to/old/project "/path/to/new/workspace"
-```
+应用不提供云同步。如需同步，可将工作区放入可信的存储系统中，并避免多台设备同时编辑同一工作区。
 
 ## Development / 开发
 
-Install dependencies:
+Development requires Node.js 24.
+
+开发环境需要 Node.js 24。
 
 ```bash
 npm install
-```
-
-Development and CI use Node.js 24.
-
-开发和 CI 使用 Node.js 24。
-
-Run the browser development server:
-
-```bash
 npm run dev
 ```
 
-Run the Electron desktop app in development:
+Open `http://127.0.0.1:61094` for the local web interface.
+
+打开 `http://127.0.0.1:61094` 使用本机网页界面。
+
+Run the Electron development build:
+
+启动 Electron 开发版：
 
 ```bash
 npm run desktop:dev
 ```
 
-Build and verify:
+Run the full verification suite:
+
+运行完整验证：
 
 ```bash
 npm run verify
 ```
 
-`npm run verify` builds the frontend and desktop/server output, runs unit tests, and checks sample LaTeX export compilation when TeX is available on the machine.
+Run the packaged desktop smoke test:
 
-`npm run verify` 会构建前端和桌面/服务端产物，运行单元测试，并在本机 TeX 可用时检查示例 LaTeX 导出能否编译为 PDF。
-
-Run coverage and the packaged Electron smoke test separately when working on persistence or desktop behavior:
-
-修改保存或桌面行为时，还应分别运行覆盖率和打包态 Electron 冒烟测试：
+运行打包后的桌面冒烟测试：
 
 ```bash
-npm run test:coverage
-npm run build
 npm run test:desktop
 ```
 
-## Packaging / 打包
+## Packaging and Release / 打包与发布
 
-Build all distributable targets supported on the current platform:
+Build a macOS installer on macOS:
 
-```bash
-npm run dist
-```
-
-Build macOS DMG:
+在 macOS 上构建 macOS 安装包：
 
 ```bash
 npm run dist:mac
 ```
 
-Build Windows NSIS installer:
+Build a Windows installer on Windows:
+
+在 Windows 上构建 Windows 安装包：
 
 ```bash
 npm run dist:win
 ```
 
-Packaging still follows platform limits. macOS DMG builds should be made on macOS. Windows installers are best built on Windows, or by a Windows CI runner.
+The GitHub Actions release workflow builds both platforms when a tag matching `v*` is pushed. It creates a draft GitHub Release containing the generated installers for review before publication.
 
-打包仍然受平台限制。macOS 的 DMG 最好在 macOS 上构建；Windows 安装包最好在 Windows 上构建，或者交给 Windows CI runner。
-
-### GitHub Actions Release / GitHub Actions 发布
-
-This repository includes `.github/workflows/release.yml` for release builds. If you do not have a Windows computer, use GitHub-hosted runners:
-
-本仓库包含 `.github/workflows/release.yml` 发布构建工作流。如果你没有 Windows 电脑，可以用 GitHub 托管 runner：
-
-1. Push the repository to GitHub.
-2. Open **Actions** > **Build Release Installers** > **Run workflow**.
-3. Download the `windows-installer` artifact after the workflow finishes. It contains the Windows NSIS `.exe`.
-4. Download the `macos-dmg` artifact if you also want a CI-built macOS DMG.
-5. To create a draft GitHub Release automatically, push a tag such as `v0.1.0`.
-
-1. 将仓库推送到 GitHub。
-2. 打开 **Actions** > **Build Release Installers** > **Run workflow**。
-3. 工作流完成后下载 `windows-installer` artifact，里面包含 Windows NSIS `.exe`。
-4. 如果也需要 CI 构建的 macOS DMG，可以下载 `macos-dmg` artifact。
-5. 如果想自动创建 GitHub Release 草稿，推送类似 `v0.1.0` 的 tag。
-
-The CI workflow runs build checks and unit tests on Windows before packaging. It is still worth testing the installer on a real Windows machine or VM before a public release, but this workflow gives you a practical release candidate even if you only develop on macOS.
-
-CI 会先在 Windows 上运行构建检查和单元测试，然后再打包。公开发布前最好仍然在真实 Windows 电脑或虚拟机里打开安装包试一次；但如果你平时只有 macOS，这个流程已经能生成一个比较实用的发布候选版本。
+推送符合 `v*` 格式的标签后，GitHub Actions 会构建两个平台的安装包，并创建包含产物的 GitHub Release 草稿，确认后再正式发布。
 
 ## FAQ / 常见问题
 
-### macOS says the app is damaged. What should I do? / macOS 提示软件“已损坏”怎么办？
+### Why is TeX not bundled? / 为什么不内置 TeX？
 
-Early macOS builds are unsigned and not notarized. If you download the DMG through Chrome or another browser, macOS may quarantine the app and show a scary “damaged” message. If you downloaded the app from this repository and trust the build, move it to Applications, then run:
+A TeX distribution is large and has its own update and package-management lifecycle. Using the system installation keeps the application smaller and lets you manage packages normally.
 
-早期 macOS 版本没有签名和公证。如果通过 Chrome 或其他浏览器下载 DMG，macOS 可能会给 app 加上隔离标记，并提示“已损坏”。如果你确认安装包来自本仓库，并且信任这个构建，可以先把 app 拖到“应用程序”，再运行：
+TeX 发行版体积较大，也有独立的更新和宏包管理机制。使用系统安装可以减小应用体积，并保留正常的宏包管理方式。
 
-```bash
-xattr -dr com.apple.quarantine "/Applications/Kaoyan Math Bank.app"
-open "/Applications/Kaoyan Math Bank.app"
-```
+### Can I commit my workspace to a public repository? / 可以把工作区提交到公开仓库吗？
 
-For a public release that ordinary users can open without this step, the macOS build needs Apple Developer ID signing and notarization.
+Only if you have the right to publish every question, solution, note, and image in it. Keep copyrighted or private content out of public repositories.
 
-如果希望普通用户下载后不需要这一步，macOS 版本需要使用 Apple Developer ID 做签名和公证。
+只有在你拥有全部题目、解析、备注和图片的公开权利时才可以。请勿将受版权保护或私有的内容提交到公开仓库。
 
-### Why not bundle TeX? / 为什么不内置 TeX？
+### Is cloud sync supported? / 支持云同步吗？
 
-TeX distributions are big, system-specific, and not fun to maintain inside another installer. For the first release, Kaoyan Math Bank stays small and uses the TeX environment that users already install for their own study or writing.
+No. Kaoyan Math Bank is local-first and does not include a cloud account or synchronization service.
 
-TeX 发行版体积大，不同系统的安装和维护方式也不一样。首版先保持软件本体轻量，直接使用用户电脑里已有的 TeX 环境。
+不支持。Kaoyan Math Bank 是本地优先应用，不包含云账户或同步服务。
 
-### Can I put real exam or textbook questions in the public repo? / 能把真题或教辅题库提交到公开仓库吗？
+## License
 
-Please do not commit copyrighted exam-prep books, scanned material, or proprietary question sets unless you have redistribution rights. The repository is meant to contain app code, empty data, and self-authored examples only.
-
-请不要把没有授权的教辅内容、扫描材料或专有题库提交到公开仓库。这个仓库只应该放应用代码、空数据和自造示例题。
-
-### Does the app sync data to the cloud? / 软件会云同步吗？
-
-No. The first release is local-first. You can put a workspace folder in your own sync drive if that fits your workflow, but sync conflicts are then your responsibility.
-
-不会。首版是本地优先。你可以按自己的习惯把工作区放进同步盘，但同步冲突需要自己处理。
-
-## License / 许可证
-
-MIT
+[MIT](LICENSE)
